@@ -3,7 +3,7 @@ import { readJson, writeJson } from '../dropbox/api'
 import type { DbxFile } from '../dropbox/api'
 import { buildSeries } from '../library/catalog'
 import { buildTree } from '../library/library'
-import { addRequest, availableMatches, removeRequest, updateRequest, type BookRequest } from './requests'
+import { addRequest, availableMatches, loadRequests, removeRequest, updateRequest, type BookRequest } from './requests'
 import type { BookInfo } from './search'
 
 vi.mock('../dropbox/api', () => ({ readJson: vi.fn(), writeJson: vi.fn() }))
@@ -41,6 +41,11 @@ test('updateRequest changes one request and keeps the others written meanwhile',
   expect(saved()[0]).toMatchObject({ id: 'a', status: 'refused', adminNote: 'Introuvable' })
   expect(saved()[0].updatedAt).toBeGreaterThan(1)
   expect(saved()[1]).toEqual(b)
+})
+
+test('a request with an unknown status is read as requested', async () => {
+  vi.mocked(readJson).mockResolvedValue([{ id: 'r1', profileId: 'p1', book: cartel, status: 'pending', createdAt: 1, updatedAt: 1 }])
+  expect((await loadRequests())[0].status).toBe('requested')
 })
 
 test('removeRequest drops it', async () => {

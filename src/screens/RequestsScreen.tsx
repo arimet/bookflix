@@ -25,10 +25,12 @@ type Props = {
 
 const byline = (b: BookInfo) => [b.authors.join(', '), b.year].filter(Boolean).join(' · ')
 
+// The BnF gives a cover URL for every record and answers 500 when it has no image: fall back to the title.
 function Cover({ book, w }: { book: BookInfo; w: BoxProps['w'] }) {
+  const [failed, setFailed] = useState(false)
   return (
     <Box w={w} aspectRatio={2 / 3} rounded="sm" overflow="hidden" flexShrink={0} bg="linear-gradient(160deg, #2f2f2f, #1a1a1a)">
-      {book.cover ? <Image src={book.cover} alt="" w="full" h="full" objectFit="cover" loading="lazy" />
+      {book.cover && !failed ? <Image src={book.cover} alt="" w="full" h="full" objectFit="cover" loading="lazy" onError={() => setFailed(true)} />
         : <Text p="2" fontSize="xs" fontWeight="bold" lineClamp={4}>{book.title}</Text>}
     </Box>
   )
@@ -151,8 +153,10 @@ export function RequestsScreen({ profile, profiles, requests, onRequest, onUpdat
   }
 
   const mine = (requests ?? []).filter((r) => r.profileId === profile.id).sort((a, b) => b.updatedAt - a.updatedAt)
-  const others = profile.admin ? (requests ?? []).sort((a, b) => Number(b.status === 'requested') - Number(a.status === 'requested') || b.createdAt - a.createdAt) : []
+  // The admin sees one list, everyone's requests including their own; new requests first.
+  const all = [...(requests ?? [])].sort((a, b) => Number(b.status === 'requested') - Number(a.status === 'requested') || b.createdAt - a.createdAt)
   const hasAdmin = profiles.some((p) => p.admin)
+  const cancel = (r: BookRequest) => <Button size="sm" variant="ghost" color="muted" onClick={() => onRemove(r.id)}>Annuler</Button>
   const readLink = (r: BookRequest) => r.status === 'available' && r.libraryBookId && (
     <Button asChild size="sm" bg="white" color="black"><a href={`#/read/${encodeURIComponent(r.libraryBookId)}`}>▶ Lire</a></Button>
   )
@@ -188,20 +192,23 @@ export function RequestsScreen({ profile, profiles, requests, onRequest, onUpdat
         </Box>
       )}
 
-      <Heading fontSize="xl" mt="12" mb="2">Mes demandes</Heading>
-      {!requests ? <Spinner /> : !mine.length ? <Text color="muted">Aucune demande pour l'instant.</Text> : mine.map((r) => (
-        <RequestRow key={r.id} request={r} actions={<>
-          {readLink(r)}
-          {r.status === 'requested' && <Button size="sm" variant="ghost" color="muted" onClick={() => onRemove(r.id)}>Annuler</Button>}
-        </>} />
-      ))}
-
-      {profile.admin && (
+      {profile.admin ? (
         <>
-          <Heading fontSize="xl" mt="12" mb="2">Toutes les demandes (admin)</Heading>
-          {!others.length ? <Text color="muted">Aucune demande.</Text> : others.map((r) => (
+          <Heading fontSize="xl" mt="12" mb="2">Toutes les demandes</Heading>
+          {!requests ? <Spinner /> : !all.length ? <Text color="muted">Aucune demande.</Text> : all.map((r) => (
             <RequestRow key={r.id} request={r} who={profiles.find((p) => p.id === r.profileId)}
-              actions={<>{readLink(r)}<AdminControls request={r} onUpdate={onUpdate} /></>} />
+              actions={<>
+                {readLink(r)}
+                <AdminControls request={r} onUpdate={onUpdate} />
+                {r.profileId === profile.id && r.status === 'requested' && cancel(r)}
+              </>} />
+          ))}
+        </>
+      ) : (
+        <>
+          <Heading fontSize="xl" mt="12" mb="2">Mes demandes</Heading>
+          {!requests ? <Spinner /> : !mine.length ? <Text color="muted">Aucune demande pour l'instant.</Text> : mine.map((r) => (
+            <RequestRow key={r.id} request={r} actions={<>{readLink(r)}{r.status === 'requested' && cancel(r)}</>} />
           ))}
         </>
       )}

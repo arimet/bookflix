@@ -106,6 +106,38 @@ test('with a key, Google Books is searched first and its summary comes with the 
   vi.unstubAllEnvs()
 })
 
+test('Google Books is retried when it answers 503', async () => {
+  vi.stubEnv('VITE_GOOGLE_BOOKS_KEY', 'K')
+  let googleCalls = 0
+  vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+    String(url).includes('googleapis') ? (++googleCalls < 3 ? new Response('', { status: 503 }) : Response.json({ items: [googleVolume] }))
+      : String(url).includes('bnf') ? new Response('<x/>') : openLibrary([])))
+  const { books, unavailable } = await searchBooks('cité en flammes')
+  expect(googleCalls).toBe(3)
+  expect(unavailable).toEqual([])
+  expect(books[0].id).toBe('gb:gb123')
+  vi.unstubAllEnvs()
+})
+
+test('when Google Books answers, the other catalogues are not called', async () => {
+  vi.stubEnv('VITE_GOOGLE_BOOKS_KEY', 'K')
+  const fetch = vi.fn(async (url: string) => (String(url).includes('googleapis') ? Response.json({ items: [googleVolume] }) : openLibrary([])))
+  vi.stubGlobal('fetch', fetch)
+  await searchBooks('cité en flammes')
+  expect(fetch.mock.calls.every((c) => String(c[0]).includes('googleapis'))).toBe(true)
+  vi.unstubAllEnvs()
+})
+
+test('when Google Books stays down, the BnF and Open Library take over, and it is reported', async () => {
+  vi.stubEnv('VITE_GOOGLE_BOOKS_KEY', 'K')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+    String(url).includes('googleapis') ? new Response('', { status: 503 }) : String(url).includes('bnf') ? new Response(bnfXml) : openLibrary([])))
+  const { books, unavailable } = await searchBooks('cité en flammes')
+  expect(unavailable).toEqual(['Google Books'])
+  expect(books[0].id).toMatch(/^bnf:/)
+  vi.unstubAllEnvs()
+})
+
 test('without a key, Google Books is not called', async () => {
   vi.stubEnv('VITE_GOOGLE_BOOKS_KEY', '')
   const fetch = route('<x/>', [])

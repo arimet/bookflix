@@ -20,8 +20,12 @@ const PATH = '/requests.json'
 const LOCAL_KEY = 'bookflix.requests'
 const isOpen = (r: BookRequest) => r.status === 'requested' || r.status === 'in_progress'
 
+const STATUSES: RequestStatus[] = ['requested', 'in_progress', 'available', 'refused']
+
+// The file can be edited by hand: an unknown status is read as a fresh request.
 async function readRemote(): Promise<BookRequest[]> {
-  return (await readJson<BookRequest[]>(PATH)) ?? []
+  const requests = (await readJson<BookRequest[]>(PATH)) ?? []
+  return requests.map((r) => (STATUSES.includes(r.status) ? r : { ...r, status: 'requested' }))
 }
 
 async function write(requests: BookRequest[]) {

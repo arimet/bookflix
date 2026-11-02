@@ -1,5 +1,5 @@
-// Book search on up to three catalogues: Google Books (needs VITE_GOOGLE_BOOKS_KEY, a key restricted to this site:
-// the keyless quota is shared and often exhausted), the BnF for French editions (legal deposit), Open Library.
+// Book search on Google Books (needs VITE_GOOGLE_BOOKS_KEY, a key restricted to this site: the keyless quota is
+// shared and often exhausted), falling back on the BnF for French editions (legal deposit) and Open Library.
 export type BookInfo = {
   id: string // Open Library work key ("/works/OL21102658W") or BnF record ("bnf:ark:/12148/cb47033552d")
   title: string
@@ -43,9 +43,17 @@ type Volume = {
 const googleKey = () => import.meta.env.VITE_GOOGLE_BOOKS_KEY as string | undefined
 const plainText = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? ''
 
+// Google Books answers 503 to about one request in two, whatever the query: a few quick retries get through.
+async function fetchGoogle(url: string, tries = 4): Promise<Response> {
+  const res = await fetch(url)
+  if (res.status !== 503 || tries <= 1) return res
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  return fetchGoogle(url, tries - 1)
+}
+
 async function searchGoogle(q: string): Promise<BookInfo[]> {
   const params = new URLSearchParams({ q, maxResults: '30', printType: 'books', key: googleKey()! })
-  const res = await fetch(`https://www.googleapis.com/books/v1/volumes?${params}`)
+  const res = await fetchGoogle(`https://www.googleapis.com/books/v1/volumes?${params}`)
   if (!res.ok) throw new Error(`Google Books ${res.status}`)
   const { items = [] } = (await res.json()) as { items?: Volume[] }
   return items.map(({ id, volumeInfo: v }) => {
@@ -131,21 +139,23 @@ const meaningful = (s: string) => words(s).filter((w) => !STOPWORDS.has(w))
 
 export type SearchResult = { books: BookInfo[]; unavailable: string[] }
 
-// Both catalogues at once; one down only removes its results, and is reported. A result must share a
-// meaningful word with the query (in its title or an author's name). Titles holding most query words come
-// first, exact titles ahead; the same book found twice (title + first author) is kept once, BnF first.
+// Google Books alone when it answers. Otherwise (no key, down, or nothing found) the BnF and Open Library at
+// once; a catalogue down only removes its results, and is reported. A result must share a meaningful word
+// with the query (in its title or an author's name). Titles holding most query words come first, exact
+// titles ahead; the same book found twice (title + first author) is kept once, BnF first.
 export async function searchBooks(query: string): Promise<SearchResult> {
   const q = query.trim().replace(/\s+/g, ' ')
   if (!q) return { books: [], unavailable: [] }
-  const sources = [
-    ...(googleKey() ? [{ name: 'Google Books', search: searchGoogle }] : []),
-    { name: 'BnF', search: searchBnf },
-    { name: 'Open Library', search: searchOpenLibrary },
-  ]
-  const settled = await Promise.allSettled(sources.map((source) => source.search(q)))
-  const unavailable = sources.filter((_, i) => settled[i].status === 'rejected').map((source) => source.name)
-  if (unavailable.length === sources.length) throw new Error('Les catalogues de livres ne répondent pas pour le moment.')
-  const found = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  let found: BookInfo[] = []
+  const unavailable: string[] = []
+  if (googleKey()) found = await searchGoogle(q).catch(() => (unavailable.push('Google Books'), []))
+  if (!found.length) {
+    const sources = [{ name: 'BnF', search: searchBnf }, { name: 'Open Library', search: searchOpenLibrary }]
+    const settled = await Promise.allSettled(sources.map((source) => source.search(q)))
+    unavailable.push(...sources.filter((_, i) => settled[i].status === 'rejected').map((source) => source.name))
+    if (settled.every((r) => r.status === 'rejected')) throw new Error('Les catalogues de livres ne répondent pas pour le moment.')
+    found = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  }
 
   const asked = new Set(meaningful(q))
   const score = (b: BookInfo) => {
