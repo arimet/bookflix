@@ -1,0 +1,268 @@
+import { Button, Stack, Text } from '@chakra-ui/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { DropboxApp } from './config'
+import { listLibrary, type LibraryListing } from './dropbox/api'
+import { AuthError, finishLogin, isLoggedIn, logout } from './dropbox/auth'
+import { SeriesModal } from './components/SeriesModal'
+import { AvatarDialog } from './components/AvatarDialog'
+import { PinSettings } from './components/PinDialogs'
+import { TopBar, type ProfileAction } from './components/TopBar'
+import { buildSeries, findSeries, seriesOfBook } from './library/catalog'
+import { allBooks, buildTree, type Book } from './library/library'
+import { listOffline, removeOffline, saveOffline } from './offline/offline'
+import { parseHash, seriesHref, type Route } from './routes'
+import { HistoryScreen, HomeScreen, KindScreen, SearchScreen } from './screens/BrowseScreens'
+import { RequestsScreen } from './screens/RequestsScreen'
+import { addRequest, availableMatches, loadRequests, removeRequest, updateRequest, type BookRequest } from './requests/requests'
+import { LoginScreen } from './screens/LoginScreen'
+import { ProfilesScreen } from './screens/ProfilesScreen'
+import { ReaderScreen } from './screens/ReaderScreen'
+import { getCurrentProfileId, loadProfiles, setCurrentProfileId, updateProfile, type Profile } from './sync/profiles'
+import { deviceName, flushPending, loadProgress, localProgress, resetProgress, type ProgressMap } from './sync/progress'
+
+// Screens a series sheet can open over; the sheet and the reader are not.
+type BaseRoute = Extract<Route, { name: 'home' | 'kind' | 'search' | 'history' | 'requests' }>
+const isBase = (r: Route): r is BaseRoute => ['home', 'kind', 'search', 'history', 'requests'].includes(r.name)
+const BASE_HASHES = { home: '#/', search: '#/recherche', history: '#/historique', requests: '#/demandes' }
+const baseHash = (r: BaseRoute) => (r.name === 'kind' ? (r.kind === 'comics' ? '#/bd' : '#/livres') : BASE_HASHES[r.name])
+
+const LIBRARY_KEY = 'bookflix.library'
+const cachedLibrary = (): LibraryListing | null => JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null')
+const connectedApps = () => ({ library: isLoggedIn('library'), sync: isLoggedIn('sync') })
+
+export default function App() {
+  const [connected, setConnected] = useState<Record<DropboxApp, boolean>>(connectedApps)
+  const [profileId, setProfileId] = useState(getCurrentProfileId)
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [library, setLibrary] = useState(cachedLibrary)
+  const [progress, setProgress] = useState<ProgressMap>(() => (profileId ? localProgress(profileId) : {}))
+  const [offline, setOffline] = useState<Set<string>>(new Set())
+  const [route, setRoute] = useState(() => parseHash(location.hash))
+  const [base, setBase] = useState<BaseRoute>(() => (isBase(route) ? route : { name: 'home' }))
+  const [query, setQuery] = useState('')
+  // Once the user has navigated inside the app, "back" can simply go back in history.
+  const navigatedInApp = useRef(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [pinOpen, setPinOpen] = useState(false)
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const [requests, setRequests] = useState<BookRequest[] | null>(null)
+
+  const onError = useCallback((e: unknown) => {
+    console.error(e)
+    if (e instanceof AuthError) setConnected(connectedApps())
+    else setError(e instanceof TypeError ? 'Pas de connexion réseau.' : String((e as Error)?.message ?? e))
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const code = params.get('code')
+    const app = params.get('state') as DropboxApp | null
+    if (!code || (app !== 'library' && app !== 'sync')) return
+    history.replaceState(null, '', location.pathname + location.hash)
+    finishLogin(app, code, 'redirect').then(() => setConnected(connectedApps()), onError)
+  }, [onError])
+
+  useEffect(() => {
+    const onHash = () => {
+      navigatedInApp.current = true
+      const next = parseHash(location.hash)
+      setRoute(next)
+      if (isBase(next)) setBase(next)
+    }
+    addEventListener('hashchange', onHash)
+    return () => removeEventListener('hashchange', onHash)
+  }, [])
+
+  const loggedIn = connected.library && connected.sync
+  const ready = loggedIn && !!profileId
+
+  useEffect(() => {
+    if (!ready) return
+    loadProfiles().then(setProfiles, onError)
+    listOffline().then(setOffline, onError)
+    // The cached listing shows at once; Dropbox then only sends what changed since.
+    listLibrary(cachedLibrary() ?? undefined).then((listing) => {
+      localStorage.setItem(LIBRARY_KEY, JSON.stringify(listing))
+      setLibrary(listing)
+    }, (e) => (e instanceof TypeError ? undefined : onError(e)))
+    const flush = () => flushPending(profileId).catch((e) => (e instanceof TypeError ? undefined : onError(e)))
+    flush()
+    addEventListener('online', flush)
+    return () => removeEventListener('online', flush)
+  }, [ready, profileId, onError])
+
+  // Reload progress whenever we land on a folder, e.g. coming back from the reader.
+  useEffect(() => {
+    if (ready && route.name !== 'read') loadProgress(profileId).then(setProgress, onError)
+  }, [ready, profileId, route.name, onError])
+
+  const goBack = (fallback: string) => (navigatedInApp.current ? history.back() : (location.hash = fallback))
+
+  const tree = useMemo(() => {
+    if (!library) return null
+    const all = buildTree(library.files)
+    if (navigator.onLine) return all
+    return buildTree(allBooks(all).filter((b) => offline.has(b.id)).map((b) => b.file))
+  }, [library, offline])
+
+  const pickProfile = (id: string | null) => {
+    setCurrentProfileId(id)
+    setProfileId(id)
+    setProgress(id ? localProgress(id) : {})
+  }
+
+  const toggleOffline = async (book: Book) => {
+    try {
+      await (offline.has(book.id) ? removeOffline(book) : saveOffline(book))
+      setOffline(await listOffline())
+    } catch (e) {
+      onError(e)
+    }
+  }
+
+  // Lists /Ebook from scratch (no cursor), then profiles, progress and downloads.
+  const reload = async () => {
+    if (!profileId) return
+    setNotice('Rechargement…')
+    try {
+      const listing = await listLibrary()
+      localStorage.setItem(LIBRARY_KEY, JSON.stringify(listing))
+      setLibrary(listing)
+      setProfiles(await loadProfiles())
+      await flushPending(profileId)
+      setProgress(await loadProgress(profileId))
+      setOffline(await listOffline())
+      setNotice('Bibliothèque à jour.')
+    } catch (e) {
+      setNotice(null)
+      onError(e)
+    }
+  }
+
+  const signOut = () => {
+    if (!confirm('Se déconnecter de Dropbox sur cet appareil ?')) return
+    logout('library')
+    logout('sync')
+    localStorage.removeItem(LIBRARY_KEY)
+    setLibrary(null)
+    pickProfile(null)
+    setConnected(connectedApps())
+  }
+
+  const resetBook = (book: Book) => {
+    if (!profileId || !confirm(`Remettre « ${book.title} » à zéro ? Il repartira du début sur tous tes appareils.`)) return
+    resetProgress(profileId, book.id, deviceName())
+    setProgress(localProgress(profileId))
+    flushPending(profileId).catch(() => {}) // stays pending, retried on reconnect
+  }
+
+  // Short confirmations fade out; "…" notices stay until replaced.
+  useEffect(() => {
+    if (!notice || notice.endsWith('…')) return
+    const timer = setTimeout(() => setNotice(null), 3000)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  const onProfileAction = (action: ProfileAction) => {
+    if (action === 'history') location.hash = '#/historique'
+    if (action === 'reload') reload()
+    if (action === 'pin') setPinOpen(true)
+    if (action === 'avatar') setAvatarOpen(true)
+    if (action === 'switch') pickProfile(null)
+    if (action === 'logout') signOut()
+  }
+
+  const series = useMemo(() => (tree ? buildSeries(tree) : null), [tree])
+
+  // Loaded at start (to spot requested books that arrived) and again each time the Demandes tab opens.
+  const onRequestsTab = route.name === 'requests'
+  useEffect(() => {
+    if (ready) loadRequests().then(setRequests, onError)
+  }, [ready, onRequestsTab, onError])
+
+  // A requested book that shows up in the library becomes "available", with a link to read it.
+  useEffect(() => {
+    if (!requests || !series) return
+    const matches = availableMatches(requests, series)
+    if (!matches.length) return
+    Promise.all(matches.map((m) => updateRequest(m.requestId, { status: 'available', libraryBookId: m.bookId })))
+      .then(loadRequests)
+      .then(setRequests, onError)
+  }, [requests, series, onError])
+
+  const withRequests = async (change: Promise<unknown>) => {
+    try {
+      await change
+      setRequests(await loadRequests())
+    } catch (e) {
+      onError(e)
+    }
+  }
+  const readingBook = route.name === 'read' && tree ? allBooks(tree).find((b) => b.id === route.bookId) : undefined
+  const openSeries = route.name === 'series' && series ? findSeries(series, route.key) : undefined
+  const profile = profiles.find((p) => p.id === profileId)
+
+  return (
+    <>
+      {!loggedIn ? (
+        <LoginScreen connected={connected} onDone={() => setConnected(connectedApps())} onError={onError} />
+      ) : !profileId ? (
+        <ProfilesScreen onPick={(p) => pickProfile(p.id)} onError={onError} />
+      ) : readingBook ? (
+        <ReaderScreen
+          book={readingBook}
+          profileId={profileId}
+          onBack={() => {
+            const home = series && seriesOfBook(series, readingBook.id)
+            goBack(home ? seriesHref(home) : '#/')
+          }}
+          onError={onError}
+        />
+      ) : (
+        <>
+          <TopBar active={base.name === 'kind' ? base.kind : base.name} profile={profile} query={query} onQuery={setQuery}
+            onAction={onProfileAction} />
+          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} />}
+          {base.name === 'history' && <HistoryScreen series={series} progress={progress} onReset={resetBook} />}
+          {base.name === 'requests' && profile && (
+            <RequestsScreen profile={profile} profiles={profiles} requests={requests} onError={onError}
+              onRequest={(book, note) => withRequests(addRequest(profile.id, book, note).then(() => setNotice('Demande envoyée.')))}
+              onUpdate={(id, changes) => withRequests(updateRequest(id, changes))}
+              onRemove={(id) => withRequests(removeRequest(id))}
+              onBecomeAdmin={() => {
+                if (!confirm(`Faire de ${profile.name} l'admin des demandes ? Pense à lui mettre un code PIN.`)) return
+                updateProfile(profile.id, { admin: true }).then(loadProfiles).then(setProfiles, onError)
+              }} />
+          )}
+          {base.name === 'kind' && <KindScreen series={series} kind={base.kind} />}
+          {base.name === 'search' && <SearchScreen series={series} query={query} />}
+          {openSeries && (
+            <SeriesModal series={openSeries} progress={progress} offline={offline} onToggleOffline={toggleOffline}
+              onReset={resetBook} onClose={() => goBack(baseHash(base))} />
+          )}
+          {avatarOpen && profile && (
+            <AvatarDialog profile={profile} onClose={() => setAvatarOpen(false)} onError={onError}
+              onDone={() => { setAvatarOpen(false); loadProfiles().then(setProfiles, onError) }} />
+          )}
+          {pinOpen && profile && (
+            <PinSettings profile={profile} onClose={() => setPinOpen(false)} onError={onError}
+              onDone={() => { setPinOpen(false); loadProfiles().then(setProfiles, onError); setNotice('Code enregistré.') }} />
+          )}
+        </>
+      )}
+      {notice && !error && (
+        <Stack position="fixed" bottom="4" insetX="4" mx="auto" maxW="sm" p="3" rounded="md" bg="panel" direction="row" align="center" zIndex="20">
+          <Text flex="1" fontSize="sm">{notice}</Text>
+          <Button size="xs" variant="ghost" onClick={() => setNotice(null)}>OK</Button>
+        </Stack>
+      )}
+      {error && (
+        <Stack position="fixed" bottom="4" insetX="4" mx="auto" maxW="md" p="4" rounded="lg" bg="red.subtle" direction="row" align="center">
+          <Text flex="1">{error}</Text>
+          <Button size="sm" variant="ghost" onClick={() => setError(null)}>OK</Button>
+        </Stack>
+      )}
+    </>
+  )
+}
