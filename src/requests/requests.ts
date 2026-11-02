@@ -74,7 +74,7 @@ export function availableMatches(requests: BookRequest[], series: Series[]): { r
     for (const s of series) {
       for (const b of s.books) {
         const path = norm(b.file.path)
-        if (norm(b.title) === title || norm(s.title) === title || (path.includes(title) && surnames.some((n) => n.trim() && path.includes(n)))) {
+        if (norm(b.title) === title || norm(s.key.split('/').at(-1)!) === title || (path.includes(title) && surnames.some((n) => n.trim() && path.includes(n)))) {
           return [{ requestId: r.id, bookId: b.id }]
         }
       }

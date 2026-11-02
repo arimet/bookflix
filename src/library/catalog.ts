@@ -19,15 +19,21 @@ function series(key: string, title: string, books: Book[]): Series {
   }
 }
 
+const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+// A sub-folder carries its parent's name ("Batman/One-Shot" → "Batman · One-Shot"), unless it already holds it.
 export function buildSeries(tree: Folder): Series[] {
   const all: Series[] = tree.books.map((b) => series(`book:${b.id}`, b.title, [b]))
-  const walk = (folder: Folder) => {
-    if (folder.books.length) all.push(series(folder.path, folder.name, folder.books))
-    folder.folders.forEach(walk)
+  const walk = (folder: Folder, parent?: Folder) => {
+    const title = parent && !fold(folder.name).includes(fold(parent.name)) ? `${parent.name} · ${folder.name}` : folder.name
+    if (folder.books.length) all.push(series(folder.path, title, folder.books))
+    folder.folders.forEach((child) => walk(child, folder))
   }
-  tree.folders.forEach(walk)
+  tree.folders.forEach((folder) => walk(folder))
   return all
 }
+
+export const newestBook = (s: Series) => s.books.find((b) => b.file.serverModified === s.addedAt) ?? s.books[0]
 
 export const recentlyAdded = (all: Series[], n = 20) =>
   [...all].sort((a, b) => b.addedAt.localeCompare(a.addedAt)).slice(0, n)
@@ -35,14 +41,15 @@ export const recentlyAdded = (all: Series[], n = 20) =>
 export const ofKind = (all: Series[], kind: Kind) =>
   all.filter((s) => s.kind === kind).sort((a, b) => collator.compare(a.title, b.title))
 
-const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
-
-export function searchSeries(all: Series[], query: string): Series[] {
+// A folder matching the query, an ancestor one included (an author), gives its series; otherwise a matching
+// book title gives that book alone.
+export function searchLibrary(all: Series[], query: string): { series: Series[]; books: Book[] } {
   const q = fold(query.trim())
-  if (!q) return []
-  return all
-    .filter((s) => fold(s.title).includes(q) || s.books.some((b) => fold(b.title).includes(q)))
-    .sort((a, b) => collator.compare(a.title, b.title))
+  if (!q) return { series: [], books: [] }
+  const byName = (a: { title: string }, b: { title: string }) => collator.compare(a.title, b.title)
+  const found = all.filter((s) => fold(s.key.startsWith('book:') ? s.title : s.key).includes(q))
+  const books = all.filter((s) => !found.includes(s)).flatMap((s) => s.books).filter((b) => fold(b.title).includes(q))
+  return { series: found.sort(byName), books: books.sort(byName) }
 }
 
 const inProgress = (book: Book, progress: ProgressMap) => {

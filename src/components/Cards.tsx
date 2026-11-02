@@ -8,10 +8,11 @@ import { ResetMenu } from './ResetMenu'
 
 const lift = { transition: 'transform .2s', _hover: { transform: 'scale(1.05)' }, _focusVisible: { transform: 'scale(1.05)' } }
 
-export function SeriesCard({ series }: { series: Series }) {
+// cover: the book whose cover stands for the series, its first one by default
+export function SeriesCard({ series, cover = series.books[0] }: { series: Series; cover?: Book }) {
   return (
     <chakra.a href={seriesHref(series)} display="block" {...lift} aria-label={series.title}>
-      <BookCover book={series.books[0]} label={series.title} />
+      <BookCover book={cover} label={series.title} />
       <Text fontSize="xs" color="muted" mt="1.5" lineClamp={1}>{series.title}</Text>
     </chakra.a>
   )
@@ -30,12 +31,14 @@ export function BookCard({ book, label, percent, onReset }: { book: Book; label:
   )
 }
 
-export function SeriesGrid({ series }: { series: Series[] }) {
+// children: more cards after the series (books found by a search)
+export function SeriesGrid({ series, children }: { series: Series[]; children?: React.ReactNode }) {
   return (
     <SimpleGrid columns={{ base: 3, sm: 4, md: 6, xl: 8 }} gap={{ base: 3, md: 4 }} rowGap="6">
       {series.map((s) => (
         <Box key={s.key}><SeriesCard series={s} /></Box>
       ))}
+      {children}
     </SimpleGrid>
   )
 }

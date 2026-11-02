@@ -6,11 +6,17 @@ import { BookCard, SeriesCard, SeriesGrid } from '../components/Cards'
 import { LIBRARY_NAME } from '../config'
 import { Hero } from '../components/Hero'
 import { Row } from '../components/Row'
-import { heroPick, ofKind, readingHistory, readingNow, recentlyAdded, searchSeries, seriesOfBook, type Kind, type Series } from '../library/catalog'
+import { heroPick, newestBook, ofKind, readingHistory, readingNow, recentlyAdded, searchLibrary, seriesOfBook, type Kind, type Series } from '../library/catalog'
 import type { Book } from '../library/library'
 import type { ProgressMap } from '../sync/progress'
 
 type Data = { series: Series[] | null; progress: ProgressMap; offline: Set<string>; onReset: (book: Book) => void }
+
+// "Boruto · Tome 02" when the book belongs to a series of several volumes
+const bookLabel = (series: Series[], b: Book) => {
+  const s = seriesOfBook(series, b.id)!
+  return s.books.length > 1 ? `${s.title} · ${b.title}` : b.title
+}
 
 const Loading = () => <Box minH="100dvh" display="grid" placeItems="center"><Spinner color="brand" size="xl" /></Box>
 
@@ -25,10 +31,7 @@ export function HomeScreen({ series, progress, offline, onReset }: Data) {
   }
   const hero = heroPick(series, progress)
   const books = series.flatMap((s) => s.books)
-  const label = (b: Book) => {
-    const s = seriesOfBook(series, b.id)!
-    return s.books.length > 1 ? `${s.title} · ${b.title}` : b.title
-  }
+  const label = (b: Book) => bookLabel(series, b)
   return (
     <Box pb="16">
       {hero && <Hero series={hero.series} book={hero.book} percent={progress[hero.book.id]?.percent ?? 0} />}
@@ -41,7 +44,7 @@ export function HomeScreen({ series, progress, offline, onReset }: Data) {
         <Row title="Téléchargés">
           {books.filter((b) => offline.has(b.id)).map((b) => <BookCard key={b.id} book={b} label={label(b)} percent={progress[b.id]?.percent} />)}
         </Row>
-        <Row title="Ajoutés récemment">{recentlyAdded(series).map((s) => <SeriesCard key={s.key} series={s} />)}</Row>
+        <Row title="Ajoutés récemment">{recentlyAdded(series).map((s) => <SeriesCard key={s.key} series={s} cover={newestBook(s)} />)}</Row>
         <Row title="BD & mangas">{ofKind(series, 'comics').map((s) => <SeriesCard key={s.key} series={s} />)}</Row>
         <Row title="Livres">{ofKind(series, 'books').map((s) => <SeriesCard key={s.key} series={s} />)}</Row>
       </Stack>
@@ -63,10 +66,11 @@ export function KindScreen({ series, kind }: { series: Series[] | null; kind: Ki
 
 export function SearchScreen({ series, query }: { series: Series[] | null; query: string }) {
   if (!series) return <Loading />
-  const results = searchSeries(series, query)
+  const results = searchLibrary(series, query)
   return (
     <Page title={query.trim() ? `Résultats pour « ${query.trim()} »` : 'Rechercher'}>
-      {query.trim() && !results.length ? <Text color="muted">Aucun titre ne correspond.</Text> : <SeriesGrid series={results} />}
+      {query.trim() && !results.series.length && !results.books.length ? <Text color="muted">Aucun titre ne correspond.</Text>
+        : <SeriesGrid series={results.series}>{results.books.map((b) => <BookCard key={b.id} book={b} label={bookLabel(series, b)} />)}</SeriesGrid>}
     </Page>
   )
 }

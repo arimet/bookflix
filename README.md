@@ -46,6 +46,7 @@ Ebook/
   Hypérion.pdf                  ← a book at the root is a series of its own
 ```
 
+A sub-folder's series carries its parent's name (`Mangas/Boruto` → "Mangas · Boruto"), unless it already holds it.
 A series counts as "Comics & manga" when most of its files are CBZ/CBR, otherwise as "Books".
 Volumes are sorted naturally (`Tome 2` before `Tome 10`).
 

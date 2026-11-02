@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import type { DbxFile } from '../dropbox/api'
 import type { ProgressMap } from '../sync/progress'
-import { buildSeries, heroPick, ofKind, readingHistory, recentlyAdded, resumeBook, searchSeries, seriesOfBook } from './catalog'
+import { buildSeries, heroPick, newestBook, ofKind, readingHistory, recentlyAdded, resumeBook, searchLibrary, seriesOfBook } from './catalog'
 import { buildTree } from './library'
 
 const f = (path: string, serverModified = '2026-01-01T00:00:00Z'): DbxFile => ({
@@ -17,9 +17,18 @@ test('every folder holding books is a series; a book at the root is a series alo
     f('/Ebook/Mangas/Boruto/T2.cbz'),
     f('/Ebook/Mangas/Akira.cbz'),
   )
-  expect(series.map((s) => [s.title, s.books.length]).sort()).toEqual([['Boruto', 2], ['Dune', 1], ['Mangas', 1]])
+  expect(series.map((s) => [s.title, s.books.length]).sort()).toEqual([['Dune', 1], ['Mangas · Boruto', 2], ['Mangas', 1]])
   expect(series.find((s) => s.title === 'Dune')!.key).toBe('book:id:/Ebook/Dune.epub')
-  expect(series.find((s) => s.title === 'Boruto')!.key).toBe('Mangas/Boruto')
+  expect(series.find((s) => s.title === 'Mangas · Boruto')!.key).toBe('Mangas/Boruto')
+})
+
+test("a sub-folder's series carries its parent's name, unless it already holds it", () => {
+  const series = catalog(
+    f('/Ebook/Batman/One-Shot/Killing Joke.cbz'),
+    f('/Ebook/Batman/Batman - Snyder/T1.cbz'),
+    f('/Ebook/Batman/Batman Metal/Phase 2/Le Batman qui rit.cbz'),
+  )
+  expect(series.map((s) => s.title).sort()).toEqual(['Batman - Snyder', 'Batman Metal · Phase 2', 'Batman · One-Shot'])
 })
 
 test('a series is comics when most of its books are CBZ or CBR', () => {
@@ -36,13 +45,28 @@ test('recently added follows the newest book of each series', () => {
     f('/Ebook/Old/2.epub', '2026-05-01T00:00:00Z'),
   )
   expect(recentlyAdded(series).map((s) => s.title)).toEqual(['Old', 'New', 'Mid'])
+  expect(newestBook(series.find((s) => s.title === 'Old')!).title).toBe('2')
 })
 
-test('search ignores case and accents and also matches book titles', () => {
-  const series = catalog(f('/Ebook/Les Misérables/Tome 1.epub'), f('/Ebook/Boruto/Héros.cbz'), f('/Ebook/X/y.pdf'))
-  expect(searchSeries(series, 'miserables').map((s) => s.title)).toEqual(['Les Misérables'])
-  expect(searchSeries(series, 'HEROS').map((s) => s.title)).toEqual(['Boruto'])
-  expect(searchSeries(series, '  ')).toEqual([])
+test('search: a folder name, an ancestor one included, gives its series; a book title gives the book', () => {
+  const series = catalog(
+    f('/Ebook/Les Misérables/Tome 1.epub'),
+    f('/Ebook/Agatha Christie/Hercule Poirot/Le Crime de l’Orient-Express.epub'),
+    f('/Ebook/Agatha Christie/Miss Marple/Meurtre au presbytère.epub'),
+    f('/Ebook/Boruto/Héros.cbz'),
+    f('/Ebook/Boruto/Tome 2.cbz'),
+    f('/Ebook/Dune.epub'),
+  )
+  const titles = (q: string) => {
+    const { series: s, books } = searchLibrary(series, q)
+    return [...s.map((x) => x.title), ...books.map((b) => b.title)]
+  }
+  expect(titles('miserables')).toEqual(['Les Misérables'])
+  expect(titles('agatha')).toEqual(['Agatha Christie · Hercule Poirot', 'Agatha Christie · Miss Marple'])
+  expect(searchLibrary(series, 'HEROS')).toEqual({ series: [], books: [series.find((s) => s.title === 'Boruto')!.books[0]] })
+  expect(titles('orient')).toEqual(['Le Crime de l’Orient-Express'])
+  expect(titles('dune')).toEqual(['Dune'])
+  expect(searchLibrary(series, '  ')).toEqual({ series: [], books: [] })
 })
 
 test('resumeBook: the volume in progress, else the first unread, else the first', () => {
