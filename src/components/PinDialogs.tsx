@@ -1,4 +1,4 @@
-import { Button, Dialog, Input, Stack, Text } from '@chakra-ui/react'
+import { Button, Dialog, Input, Portal, Stack, Text } from '@chakra-ui/react'
 import { useState } from 'react'
 import { checkPin, setProfilePin, type Profile } from '../sync/profiles'
 
@@ -15,13 +15,15 @@ function PinInput({ value, onChange, label, autoFocus }: { value: string; onChan
 export function Shell({ title, onClose, children, size = 'xs' }: { title: string; onClose: () => void; children: React.ReactNode; size?: 'xs' | 'md' }) {
   return (
     <Dialog.Root open onOpenChange={(e) => !e.open && onClose()} placement="center" size={size}>
-      <Dialog.Backdrop bg="rgba(0,0,0,.8)" />
-      <Dialog.Positioner>
-        <Dialog.Content bg="panel" color="white" mx="4">
-          <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
-          <Dialog.Body pb="6">{children}</Dialog.Body>
-        </Dialog.Content>
-      </Dialog.Positioner>
+      <Portal>
+        <Dialog.Backdrop bg="rgba(0,0,0,.8)" />
+        <Dialog.Positioner>
+          <Dialog.Content bg="panel" color="white" mx="4">
+            <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
+            <Dialog.Body pb="6">{children}</Dialog.Body>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
     </Dialog.Root>
   )
 }

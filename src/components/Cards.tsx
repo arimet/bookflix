@@ -3,7 +3,7 @@ import type { Series } from '../library/catalog'
 import type { Book } from '../library/library'
 import { readHref, seriesHref } from '../routes'
 import { BookCover } from './BookCover'
-import { ResetMenu } from './ResetMenu'
+import { BookMenu } from './BookMenu'
 
 
 const lift = { transition: 'transform .2s', _hover: { transform: 'scale(1.05)' }, _focusVisible: { transform: 'scale(1.05)' } }
@@ -19,14 +19,17 @@ export function SeriesCard({ series, cover = series.books[0] }: { series: Series
 }
 
 // label: "Boruto · Tome 02" when the book belongs to a series of several volumes
-export function BookCard({ book, label, percent, onReset }: { book: Book; label: string; percent?: number; onReset?: () => void }) {
+type BookCardProps = { book: Book; label: string; percent?: number; onReset?: () => void; onRemoveOffline?: () => void }
+
+export function BookCard({ book, label, percent, onReset, onRemoveOffline }: BookCardProps) {
   return (
     <Box position="relative">
-      <chakra.a href={readHref(book)} display="block" {...lift} aria-label={label}>
-        <BookCover book={book} label={label} percent={percent} />
-        <Text fontSize="xs" color="muted" mt="1.5" lineClamp={1}>{label}</Text>
-      </chakra.a>
-      {onReset && <ResetMenu title={label} onReset={onReset} top="1.5" right="1.5" />}
+      <BookMenu title={label} onReset={onReset} onRemoveOffline={onRemoveOffline} button={{ top: '1.5', right: '1.5' }}>
+        <chakra.a href={readHref(book)} display="block" {...lift} aria-label={label}>
+          <BookCover book={book} label={label} percent={percent} />
+          <Text fontSize="xs" color="muted" mt="1.5" lineClamp={1}>{label}</Text>
+        </chakra.a>
+      </BookMenu>
     </Box>
   )
 }

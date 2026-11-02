@@ -4,6 +4,12 @@ import type { Book } from '../library/library'
 import { RED } from '../theme'
 import { useCoverUrl } from './useCoverUrl'
 
+// A coloured gradient for a book without cover, always the same for a given title.
+export function placeholderBg(title: string) {
+  const hue = [...title].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)
+  return `linear-gradient(160deg, hsl(${hue} 55% 42%), hsl(${(hue + 40) % 360} 60% 16%))`
+}
+
 // small: thumbnails too narrow for a title on the placeholder
 type Props = { book: Book; label?: string; percent?: number; small?: boolean }
 
@@ -12,7 +18,7 @@ export function BookCover({ book, label, percent, small }: Props) {
   const url = useCoverUrl(book, ref)
   return (
     <Box ref={ref} aspectRatio={2 / 3} rounded="sm" overflow="hidden" position="relative"
-      bg="linear-gradient(160deg, #2f2f2f, #1a1a1a)">
+      bg={placeholderBg(label ?? book.title)}>
       {url ? (
         <Image src={url} alt="" w="full" h="full" objectFit="cover" />
       ) : (

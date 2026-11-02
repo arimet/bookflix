@@ -1,4 +1,5 @@
-import { Box, Button, Dialog, Flex, Spinner, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, Dialog, Flex, Stack, Text } from '@chakra-ui/react'
+import { Loader } from '../components/Loader'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
 import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -167,7 +168,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
           <Box ref={containerRef} w="full" maxW={columnWidth(layout.width)} mx="auto" h="full" />
           {!reader && (
             <Box position="absolute" inset="0" display="grid" placeItems="center">
-              <Spinner />
+              <Loader />
             </Box>
           )}
         </ReactReader>

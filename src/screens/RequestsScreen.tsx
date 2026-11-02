@@ -1,6 +1,8 @@
-import { Badge, Box, Button, chakra, type BoxProps, Dialog, Flex, Heading, Image, Input, SimpleGrid, Spinner, Stack, Text, Textarea } from '@chakra-ui/react'
+import { Badge, Box, Button, chakra, type BoxProps, Dialog, Flex, Heading, Image, Input, SimpleGrid, Stack, Text, Textarea } from '@chakra-ui/react'
+import { Loader } from '../components/Loader'
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
+import { placeholderBg } from '../components/BookCover'
 import type { BookRequest, RequestStatus } from '../requests/requests'
 import { bookDescription, searchBooks, type BookInfo } from '../requests/search'
 import type { Profile } from '../sync/profiles'
@@ -29,7 +31,7 @@ const byline = (b: BookInfo) => [b.authors.join(', '), b.year].filter(Boolean).j
 function Cover({ book, w }: { book: BookInfo; w: BoxProps['w'] }) {
   const [failed, setFailed] = useState(false)
   return (
-    <Box w={w} aspectRatio={2 / 3} rounded="sm" overflow="hidden" flexShrink={0} bg="linear-gradient(160deg, #2f2f2f, #1a1a1a)">
+    <Box w={w} aspectRatio={2 / 3} rounded="sm" overflow="hidden" flexShrink={0} bg={placeholderBg(book.title)}>
       {book.cover && !failed ? <Image src={book.cover} alt="" w="full" h="full" objectFit="cover" loading="lazy" onError={() => setFailed(true)} />
         : <Text p="2" fontSize="xs" fontWeight="bold" lineClamp={4}>{book.title}</Text>}
     </Box>
@@ -73,7 +75,7 @@ function BookSheet({ book, existing, onRequest, onClose }: { book: BookInfo; exi
               </Stack>
             </Flex>
             <Box mt="4" fontSize="sm" color="#ddd" whiteSpace="pre-line">
-              {description === undefined ? <Spinner size="sm" /> : description ? <Summary text={description} /> : <Text color="muted">Pas de résumé disponible.</Text>}
+              {description === undefined ? <Loader small /> : description ? <Summary text={description} /> : <Text color="muted">Pas de résumé disponible.</Text>}
             </Box>
             {existing ? (
               <Text mt="5" fontWeight="bold">Déjà demandé · {STATUS[existing.status].label}</Text>
@@ -195,7 +197,7 @@ export function RequestsScreen({ profile, profiles, requests, onRequest, onUpdat
       {profile.admin ? (
         <>
           <Heading fontSize="xl" mt="12" mb="2">Toutes les demandes</Heading>
-          {!requests ? <Spinner /> : !all.length ? <Text color="muted">Aucune demande.</Text> : all.map((r) => (
+          {!requests ? <Loader small /> : !all.length ? <Text color="muted">Aucune demande.</Text> : all.map((r) => (
             <RequestRow key={r.id} request={r} who={profiles.find((p) => p.id === r.profileId)}
               actions={<>
                 {readLink(r)}
@@ -207,7 +209,7 @@ export function RequestsScreen({ profile, profiles, requests, onRequest, onUpdat
       ) : (
         <>
           <Heading fontSize="xl" mt="12" mb="2">Mes demandes</Heading>
-          {!requests ? <Spinner /> : !mine.length ? <Text color="muted">Aucune demande pour l'instant.</Text> : mine.map((r) => (
+          {!requests ? <Loader small /> : !mine.length ? <Text color="muted">Aucune demande pour l'instant.</Text> : mine.map((r) => (
             <RequestRow key={r.id} request={r} actions={<>{readLink(r)}{r.status === 'requested' && cancel(r)}</>} />
           ))}
         </>

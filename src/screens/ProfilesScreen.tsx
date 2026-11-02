@@ -1,4 +1,5 @@
-import { Box, Button, Heading, Input, SimpleGrid, Spinner, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, Heading, Input, SimpleGrid, Stack, Text } from '@chakra-ui/react'
+import { FullLoader } from '../components/Loader'
 import { useEffect, useState } from 'react'
 import { Avatar, AvatarPicker } from '../components/Avatar'
 import { AVATARS } from '../components/avatars'
@@ -39,7 +40,7 @@ export function ProfilesScreen({ onPick, onError }: { onPick: (p: Profile) => vo
     loadProfiles().then(setProfiles, onError)
   }, [onError])
 
-  if (!profiles) return <Box minH="100dvh" display="grid" placeItems="center"><Spinner /></Box>
+  if (!profiles) return <FullLoader />
 
   return (
     <Box minH="100dvh" display="grid" placeItems="center" p="6">

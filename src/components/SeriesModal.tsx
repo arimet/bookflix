@@ -5,7 +5,8 @@ import type { Book } from '../library/library'
 import { cachedBookSettings, defaultDirection } from '../sync/books'
 import type { ProgressMap } from '../sync/progress'
 import { BookCover } from './BookCover'
-import { ResetMenu } from './ResetMenu'
+import { BookMenu } from './BookMenu'
+import { Marquee } from './Marquee'
 import { useCoverUrl } from './useCoverUrl'
 import { useSoftBackdrop } from './useSoftBackdrop'
 import { readHref } from '../routes'
@@ -26,14 +27,16 @@ function Episode({ book, index, progress, offline, onToggleOffline, onReset }: {
   return (
     <Flex gap="4" align="center" py="3" px="2" borderTop="1px solid #2e2e2e" rounded="sm" _hover={{ bg: '#2a2a2a' }}>
       <Text w="6" textAlign="center" fontSize="xl" color="muted" hideBelow="sm">{index + 1}</Text>
-      <chakra.a href={readHref(book)} display="flex" gap="4" alignItems="center" flex="1" minW="0">
-        <Box w="14" flexShrink={0}><BookCover book={book} small percent={isRead(book, progress) ? undefined : percent} /></Box>
-        <Stack gap="1" minW="0">
-          <Text fontWeight="bold" truncate>{book.title}</Text>
-          <Text fontSize="sm" color="muted">{state} · {book.format.toUpperCase()}</Text>
-        </Stack>
-      </chakra.a>
-      {percent > 0 && <Box position="relative" w="8" h="8"><ResetMenu title={book.title} onReset={() => onReset(book)} top="1" right="0" /></Box>}
+      <BookMenu title={book.title} onReset={percent > 0 ? () => onReset(book) : undefined}
+        onRemoveOffline={offline.has(book.id) ? () => onToggleOffline(book) : undefined}>
+        <chakra.a href={readHref(book)} display="flex" gap="4" alignItems="center" flex="1" minW="0">
+          <Box w="14" flexShrink={0}><BookCover book={book} small percent={isRead(book, progress) ? undefined : percent} /></Box>
+          <Stack gap="1" minW="0">
+            <Marquee fontWeight="bold">{book.title}</Marquee>
+            <Text fontSize="sm" color="muted">{state} · {book.format.toUpperCase()}</Text>
+          </Stack>
+        </chakra.a>
+      </BookMenu>
       <Button size="sm" variant="ghost" color={offline.has(book.id) ? '#46d369' : 'muted'} loading={busy}
         aria-label={offline.has(book.id) ? `Retirer ${book.title} de l'appareil` : `Télécharger ${book.title}`}
         onClick={() => { setBusy(true); onToggleOffline(book).finally(() => setBusy(false)) }}>
@@ -88,8 +91,10 @@ export function SeriesModal({ series, progress, offline, onToggleOffline, onRese
               <Badge variant="outline" color="muted">{series.kind === 'comics' ? 'BD & manga' : 'Livre'}</Badge>
               <Text color="muted">{direction === 'rtl' ? 'droite → gauche' : 'gauche → droite'}</Text>
             </Flex>
-            <Button asChild mt="4" bg="white" color="black" fontWeight="bold" size="lg" w={{ base: 'full', md: 'auto' }}>
-              <a href={readHref(next)}>▶ {started ? 'Reprendre' : 'Lire'}{series.books.length > 1 ? ` ${next.title}` : ''}</a>
+            <Button asChild mt="4" bg="white" color="black" fontWeight="bold" size="lg" w={{ base: 'full', md: 'auto' }} maxW="full" justifyContent="flex-start">
+              <a href={readHref(next)}>
+                <Marquee as="span" minW="0">▶ {started ? 'Reprendre' : 'Lire'}{series.books.length > 1 ? ` ${next.title}` : ''}</Marquee>
+              </a>
             </Button>
             <Flex justify="space-between" align="center" mt="8" mb="2">
               <Heading fontSize="xl">{series.books.length > 1 ? 'Tomes' : 'Livre'}</Heading>

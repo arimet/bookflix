@@ -5,6 +5,7 @@ import { listLibrary, type LibraryListing } from './dropbox/api'
 import { AuthError, finishLogin, isLoggedIn, logout } from './dropbox/auth'
 import { SeriesModal } from './components/SeriesModal'
 import { AvatarDialog } from './components/AvatarDialog'
+import { ConfirmDialog, type Confirm } from './components/ConfirmDialog'
 import { PinSettings } from './components/PinDialogs'
 import { TopBar, type ProfileAction } from './components/TopBar'
 import { buildSeries, findSeries, seriesOfBook } from './library/catalog'
@@ -40,6 +41,7 @@ export default function App() {
   const [route, setRoute] = useState(() => parseHash(location.hash))
   const [base, setBase] = useState<BaseRoute>(() => (isBase(route) ? route : { name: 'home' }))
   const [query, setQuery] = useState('')
+  const [confirming, setConfirming] = useState<Confirm | null>(null)
   // Once the user has navigated inside the app, "back" can simply go back in history.
   const navigatedInApp = useRef(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,18 +142,17 @@ export default function App() {
     }
   }
 
-  const signOut = () => {
-    if (!confirm('Se déconnecter de Dropbox sur cet appareil ?')) return
+  const signOut = () => setConfirming({ title: 'Se déconnecter ?', text: 'Dropbox sera déconnecté sur cet appareil.', action: 'Se déconnecter', onOk: () => {
     logout('library')
     logout('sync')
     localStorage.removeItem(LIBRARY_KEY)
     setLibrary(null)
     pickProfile(null)
     setConnected(connectedApps())
-  }
+  } })
 
   const resetBook = (book: Book) => {
-    if (!profileId || !confirm(`Remettre « ${book.title} » à zéro ? Il repartira du début sur tous tes appareils.`)) return
+    if (!profileId) return // confirmed in BookMenu
     resetProgress(profileId, book.id, deviceName())
     setProgress(localProgress(profileId))
     flushPending(profileId).catch(() => {}) // stays pending, retried on reconnect
@@ -223,17 +224,17 @@ export default function App() {
         <>
           <TopBar active={base.name === 'kind' ? base.kind : base.name} profile={profile} query={query} onQuery={setQuery}
             onAction={onProfileAction} />
-          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} />}
+          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} onRemoveOffline={toggleOffline} />}
           {base.name === 'history' && <HistoryScreen series={series} progress={progress} onReset={resetBook} />}
           {base.name === 'requests' && profile && (
             <RequestsScreen profile={profile} profiles={profiles} requests={requests} onError={onError}
               onRequest={(book, note) => withRequests(addRequest(profile.id, book, note).then(() => setNotice('Demande envoyée.')))}
               onUpdate={(id, changes) => withRequests(updateRequest(id, changes))}
               onRemove={(id) => withRequests(removeRequest(id))}
-              onBecomeAdmin={() => {
-                if (!confirm(`Faire de ${profile.name} l'admin des demandes ? Pense à lui mettre un code PIN.`)) return
-                updateProfile(profile.id, { admin: true }).then(loadProfiles).then(setProfiles, onError)
-              }} />
+              onBecomeAdmin={() => setConfirming({
+                title: 'Devenir admin ?', text: `${profile.name} suivra les demandes de tous les profils. Pense à lui mettre un code PIN.`,
+                action: 'Devenir admin', onOk: () => updateProfile(profile.id, { admin: true }).then(loadProfiles).then(setProfiles, onError),
+              })} />
           )}
           {base.name === 'kind' && <KindScreen series={series} kind={base.kind} />}
           {base.name === 'search' && <SearchScreen series={series} query={query} />}
@@ -251,6 +252,7 @@ export default function App() {
           )}
         </>
       )}
+      {confirming && <ConfirmDialog {...confirming} onClose={() => setConfirming(null)} />}
       {notice && !error && (
         <Stack position="fixed" bottom="4" insetX="4" mx="auto" maxW="sm" p="3" rounded="md" bg="panel" direction="row" align="center" zIndex="20">
           <Text flex="1" fontSize="sm">{notice}</Text>
