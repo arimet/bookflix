@@ -66,8 +66,13 @@ export function blockReader(size: number, blockSize: number, read: ReadRange): R
 }
 
 // A CBZ or EPUB read straight from Dropbox: only the zip directory and the entries asked for are fetched.
-export const createRemoteArchive = (book: Book) =>
-  createArchiveFromZipJs(openRemoteZip(book.file.size, blockReader(book.file.size, BLOCK, (start, length) => downloadBookRange(book.id, start, length))), {
+// The first pages sit at the start of the file and the directory at its end: both are asked for at once,
+// instead of the first page waiting for the directory (one Dropbox round trip less to open a book).
+export const createRemoteArchive = (book: Book) => {
+  const read = blockReader(book.file.size, BLOCK, (start, length) => downloadBookRange(book.id, start, length))
+  read(0, 1).catch(() => {}) // ponytail: also fetched when resuming further in; 1 MB wasted then
+  return createArchiveFromZipJs(openRemoteZip(book.file.size, read), {
     name: book.file.name,
     encodingFormat: book.format === 'cbz' ? 'application/vnd.comicbook+zip' : 'application/epub+zip',
   })
+}
