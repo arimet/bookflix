@@ -1,4 +1,3 @@
-import { LIBRARY_ROOT } from '../config'
 import type { DbxFile } from '../dropbox/api'
 
 export type Format = 'epub' | 'cbz' | 'cbr' | 'pdf'
@@ -16,7 +15,7 @@ export function formatOf(name: string): Format | null {
 
 const emptyFolder = (name: string, path: string): Folder => ({ name, path, folders: [], books: [] })
 
-export function buildTree(files: DbxFile[], root = LIBRARY_ROOT): Folder {
+export function buildTree(files: DbxFile[], root: string): Folder {
   const tree = emptyFolder('', '')
   const prefix = root.toLowerCase() + '/'
   for (const file of files) {

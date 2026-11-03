@@ -63,7 +63,7 @@ test('availableMatches finds requested books that arrived in the library', () =>
     f('/Ebook/Romans/Cartel - Don Winslow.epub'),
     f('/Ebook/Mangas/Détective Conan/Tome 01.cbz'),
     f('/Ebook/Dune.epub'),
-  ]))
+  ], '/Ebook'))
   const matches = availableMatches([
     req('Cartel', ['Don Winslow']), // title + author in the file name
     req('Detective Conan'), // series name, accents ignored
@@ -80,6 +80,6 @@ test('availableMatches finds requested books that arrived in the library', () =>
 })
 
 test('a short title alone does not match a longer one by accident', () => {
-  const series = buildSeries(buildTree([f('/Ebook/Dune Messiah.epub')]))
+  const series = buildSeries(buildTree([f('/Ebook/Dune Messiah.epub')], '/Ebook'))
   expect(availableMatches([req('Dune')], series)).toEqual([])
 })

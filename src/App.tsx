@@ -1,6 +1,6 @@
 import { Button, Stack, Text } from '@chakra-ui/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DropboxApp } from './config'
+import { LIBRARY_ROOT, type DropboxApp } from './config'
 import { listLibrary, type LibraryListing } from './dropbox/api'
 import { AuthError, isLoggedIn, loginErrorFromUrl, logout } from './dropbox/auth'
 import { completeLogin, startConnection } from './dropbox/loginChain'
@@ -20,6 +20,7 @@ import { addRequest, availableMatches, loadRequests, removeRequest, updateReques
 import { LoginScreen } from './screens/LoginScreen'
 import { ProfilesScreen } from './screens/ProfilesScreen'
 import { ReaderScreen } from './screens/ReaderScreen'
+import { cachedLibraryRoot } from './sync/libraryRoot'
 import { getCurrentProfileId, loadProfiles, setCurrentProfileId, updateProfile, type Profile } from './sync/profiles'
 import { deviceName, flushPending, loadProgress, localProgress, resetProgress, type ProgressMap } from './sync/progress'
 
@@ -30,7 +31,11 @@ const BASE_HASHES = { home: '#/', search: '#/recherche', history: '#/historique'
 const baseHash = (r: BaseRoute) => (r.name === 'kind' ? (r.kind === 'comics' ? '#/bd' : '#/livres') : BASE_HASHES[r.name])
 
 const LIBRARY_KEY = 'bookflix.library'
-const cachedLibrary = (): LibraryListing | null => JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null')
+// A listing cached before folders could be chosen was of the default folder.
+const cachedLibrary = (): LibraryListing | null => {
+  const listing = JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? 'null')
+  return listing && { root: LIBRARY_ROOT, ...listing }
+}
 const connectedApps = () => ({ library: isLoggedIn('library'), sync: isLoggedIn('sync') })
 
 export default function App() {
@@ -108,7 +113,7 @@ export default function App() {
     loadProfiles().then(setProfiles, onError)
     listOffline().then(setOffline, onError)
     // The cached listing shows at once; Dropbox then only sends what changed since.
-    listLibrary(cachedLibrary() ?? undefined).then((listing) => {
+    listLibrary(cachedLibraryRoot() ?? LIBRARY_ROOT, cachedLibrary() ?? undefined).then((listing) => {
       localStorage.setItem(LIBRARY_KEY, JSON.stringify(listing))
       setLibrary(listing)
     }, (e) => (e instanceof TypeError ? undefined : onError(e)))
@@ -127,9 +132,9 @@ export default function App() {
 
   const tree = useMemo(() => {
     if (!library) return null
-    const all = buildTree(library.files)
+    const all = buildTree(library.files, library.root)
     if (navigator.onLine) return all
-    return buildTree(allBooks(all).filter((b) => offline.has(b.id)).map((b) => b.file))
+    return buildTree(allBooks(all).filter((b) => offline.has(b.id)).map((b) => b.file), library.root)
   }, [library, offline])
 
   const pickProfile = (id: string | null) => {
@@ -164,7 +169,7 @@ export default function App() {
     if (!profileId) return
     setNotice('Rechargement…')
     try {
-      const listing = await listLibrary()
+      const listing = await listLibrary(cachedLibraryRoot() ?? LIBRARY_ROOT)
       localStorage.setItem(LIBRARY_KEY, JSON.stringify(listing))
       setLibrary(listing)
       setProfiles(await loadProfiles())

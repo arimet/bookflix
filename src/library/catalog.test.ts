@@ -7,7 +7,7 @@ import { buildTree } from './library'
 const f = (path: string, serverModified = '2026-01-01T00:00:00Z'): DbxFile => ({
   id: `id:${path}`, name: path.split('/').pop()!, path, size: 1, rev: 'r', serverModified,
 })
-const catalog = (...files: DbxFile[]) => buildSeries(buildTree(files))
+const catalog = (...files: DbxFile[]) => buildSeries(buildTree(files, '/Ebook'))
 const p = (percent: number, updatedAt: number) => ({ cfi: 'c', percent, updatedAt, device: 'Mac' })
 
 test('every folder holding books is a series; a book at the root is a series alone', () => {

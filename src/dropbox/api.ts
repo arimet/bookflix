@@ -1,4 +1,4 @@
-import { LIBRARY_ROOT, type DropboxApp } from '../config'
+import type { DropboxApp } from '../config'
 import { AuthError, getAccessToken, logout } from './auth'
 
 export type DbxFile = { id: string; name: string; path: string; size: number; rev: string; serverModified: string }
@@ -52,10 +52,12 @@ type RawEntry = {
   rev: string
   server_modified: string
 }
-export type LibraryListing = { files: DbxFile[]; cursor: string }
+export type LibraryListing = { files: DbxFile[]; cursor: string; root: string }
 
 // With a cursor, Dropbox only sends what changed since the last listing: a reload costs one small call.
-export async function listLibrary(previous?: LibraryListing): Promise<LibraryListing> {
+// A listing of another folder (the household picked a new one) is of no use: start over.
+export async function listLibrary(root: string, previous?: LibraryListing): Promise<LibraryListing> {
+  if (previous?.root !== root) previous = undefined
   let page
   const files = new Map((previous?.files ?? []).map((f) => [f.path.toLowerCase(), f]))
   try {
@@ -67,7 +69,7 @@ export async function listLibrary(previous?: LibraryListing): Promise<LibraryLis
   }
   if (!page) {
     files.clear()
-    page = await (await rpc('library', '/files/list_folder', { path: LIBRARY_ROOT, recursive: true, limit: 2000 })).json()
+    page = await (await rpc('library', '/files/list_folder', { path: root, recursive: true, limit: 2000 })).json()
   }
   for (;;) {
     for (const e of page.entries as RawEntry[]) {
@@ -79,10 +81,37 @@ export async function listLibrary(previous?: LibraryListing): Promise<LibraryLis
         })
       }
     }
-    if (!page.has_more) return { files: [...files.values()], cursor: page.cursor }
+    if (!page.has_more) return { files: [...files.values()], cursor: page.cursor, root }
     page = await (await rpc('library', '/files/list_folder/continue', { cursor: page.cursor })).json()
   }
 }
+
+export type DbxFolder = { name: string; path: string }
+const collator = new Intl.Collator('fr', { numeric: true })
+
+// One level of folders, for choosing the books folder. The Dropbox root is ''.
+export async function listFolders(path: string): Promise<DbxFolder[]> {
+  const folders: DbxFolder[] = []
+  let page = await (await rpc('library', '/files/list_folder', { path, recursive: false, limit: 2000 })).json()
+  for (;;) {
+    for (const e of page.entries as RawEntry[]) if (e['.tag'] === 'folder') folders.push({ name: e.name, path: e.path_display })
+    if (!page.has_more) return folders.sort((a, b) => collator.compare(a.name, b.name))
+    page = await (await rpc('library', '/files/list_folder/continue', { cursor: page.cursor })).json()
+  }
+}
+
+export async function folderExists(path: string): Promise<boolean> {
+  try {
+    return (await (await rpc('library', '/files/get_metadata', { path })).json())['.tag'] === 'folder'
+  } catch (e) {
+    if (e instanceof DropboxError && e.status === 409 && e.message.startsWith('path/not_found')) return false
+    throw e
+  }
+}
+
+// Dropbox Business: the listing root is the member's own folder, team folders stay out of reach.
+export const isTeamAccount = async () =>
+  (await (await rpc('library', '/users/get_current_account', null)).json()).root_info?.['.tag'] === 'team'
 
 async function download(app: DropboxApp, pathOrId: string): Promise<Blob> {
   const res = await call(app, `${CONTENT}/files/download`, { headers: { 'Dropbox-API-Arg': dropboxArg({ path: pathOrId }) } })

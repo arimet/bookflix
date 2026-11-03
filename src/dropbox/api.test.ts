@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from 'vitest'
-import { dropboxArg, downloadBook, downloadBookRange, listLibrary, readJson, writeJson, type DbxFile } from './api'
+import { DropboxError, dropboxArg, downloadBook, downloadBookRange, folderExists, isTeamAccount, listFolders, listLibrary, readJson, writeJson, type DbxFile } from './api'
 
 vi.mock('./auth', () => ({ getAccessToken: async (app: string) => `token-${app}`, logout: vi.fn(), AuthError: class extends Error {} }))
 
@@ -19,7 +19,7 @@ test('listLibrary lists /Ebook recursively with the read-only app and follows th
     .mockResolvedValueOnce(Response.json({ entries: [file('a.cbz'), { '.tag': 'folder', name: 'S' }], has_more: true, cursor: 'c1' }))
     .mockResolvedValueOnce(Response.json({ entries: [file('b.epub')], has_more: false, cursor: 'c2' }))
 
-  const { files, cursor } = await listLibrary()
+  const { files, cursor } = await listLibrary('/Ebook')
 
   expect(cursor).toBe('c2')
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ path: '/Ebook', recursive: true, limit: 2000 })
@@ -39,9 +39,9 @@ test('listLibrary with a cursor only fetches what changed', async () => {
       cursor: 'c9',
     }),
   )
-  const before = { files: [known('/Ebook/Old/a.cbz'), known('/Ebook/x.pdf'), known('/Ebook/keep.cbz')], cursor: 'c8' }
+  const before = { files: [known('/Ebook/Old/a.cbz'), known('/Ebook/x.pdf'), known('/Ebook/keep.cbz')], cursor: 'c8', root: '/Ebook' }
 
-  const after = await listLibrary(before)
+  const after = await listLibrary('/Ebook', before)
 
   expect(fetchMock.mock.calls[0][0]).toBe('https://api.dropboxapi.com/2/files/list_folder/continue')
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ cursor: 'c8' })
@@ -53,7 +53,7 @@ test('listLibrary starts over when Dropbox resets the cursor', async () => {
   fetchMock
     .mockResolvedValueOnce(Response.json({ error_summary: 'reset/..' }, { status: 409 }))
     .mockResolvedValueOnce(Response.json({ entries: [file('a.cbz')], has_more: false, cursor: 'c1' }))
-  const after = await listLibrary({ files: [known('/Ebook/gone.cbz')], cursor: 'old' })
+  const after = await listLibrary('/Ebook', { files: [known('/Ebook/gone.cbz')], cursor: 'old', root: '/Ebook' })
   expect(after.files.map((f) => f.name)).toEqual(['a.cbz'])
   expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ path: '/Ebook', recursive: true, limit: 2000 })
 })
@@ -97,4 +97,56 @@ test('readJson throws on other errors', async () => {
 
 test('dropboxArg escapes non-ascii', () => {
   expect(dropboxArg({ path: '/Été' })).toBe('{"path":"/\\u00c9t\\u00e9"}')
+})
+
+test('listLibrary lists the given root', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ entries: [], has_more: false, cursor: 'c1' }))
+  const listing = await listLibrary('/Livres')
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ path: '/Livres', recursive: true, limit: 2000 })
+  expect(listing.root).toBe('/Livres')
+})
+
+test('listLibrary starts over when the root changed', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ entries: [], has_more: false, cursor: 'c1' }))
+  const after = await listLibrary('/Livres', { files: [known('/Ebook/a.cbz')], cursor: 'old', root: '/Ebook' })
+  expect(fetchMock.mock.calls[0][0]).toBe('https://api.dropboxapi.com/2/files/list_folder')
+  expect(after.files).toEqual([])
+})
+
+test('listFolders keeps folders only, sorted', async () => {
+  const folder = (name: string) => ({ '.tag': 'folder', name, path_display: `/${name}` })
+  fetchMock
+    .mockResolvedValueOnce(Response.json({ entries: [folder('B'), file('a.cbz')], has_more: true, cursor: 'c1' }))
+    .mockResolvedValueOnce(Response.json({ entries: [folder('A 10'), folder('A 2')], has_more: false, cursor: 'c2' }))
+  const folders = await listFolders('')
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ path: '', recursive: false, limit: 2000 })
+  expect(folders).toEqual([{ name: 'A 2', path: '/A 2' }, { name: 'A 10', path: '/A 10' }, { name: 'B', path: '/B' }])
+})
+
+test('folderExists is false on path/not_found', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ error_summary: 'path/not_found/..' }, { status: 409 }))
+  expect(await folderExists('/Ebook')).toBe(false)
+})
+
+test('folderExists is true for a folder only', async () => {
+  fetchMock
+    .mockResolvedValueOnce(Response.json({ '.tag': 'folder', name: 'Ebook' }))
+    .mockResolvedValueOnce(Response.json({ '.tag': 'file', name: 'Ebook' }))
+  expect(await folderExists('/Ebook')).toBe(true)
+  expect(await folderExists('/Ebook')).toBe(false)
+})
+
+test('folderExists lets other errors through', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ error_summary: 'too_many_requests/' }, { status: 429 }))
+  expect(await folderExists('/Ebook').catch((e) => e)).toBeInstanceOf(DropboxError)
+})
+
+test('isTeamAccount reads root_info', async () => {
+  fetchMock
+    .mockResolvedValueOnce(Response.json({ root_info: { '.tag': 'team' } }))
+    .mockResolvedValueOnce(Response.json({ root_info: { '.tag': 'user' } }))
+  expect(await isTeamAccount()).toBe(true)
+  expect(fetchMock.mock.calls[0][0]).toBe('https://api.dropboxapi.com/2/users/get_current_account')
+  expect(auth(0)).toBe('Bearer token-library')
+  expect(await isTeamAccount()).toBe(false)
 })
