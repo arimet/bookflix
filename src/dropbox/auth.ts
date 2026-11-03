@@ -8,8 +8,9 @@ export class AuthError extends Error {
   }
 }
 
-type Mode = 'redirect' | 'code'
-type StoredAuth = { refreshToken: string; accessToken: string; expiresAt: number }
+export type Mode = 'redirect' | 'code'
+// accountId: missing on tokens saved before it was kept.
+type StoredAuth = { refreshToken: string; accessToken: string; expiresAt: number; accountId?: string }
 
 const authKey = (app: DropboxApp) => `bookflix.auth.${app}`
 const verifierKey = (app: DropboxApp) => `bookflix.pkce.${app}`
@@ -26,7 +27,8 @@ export async function pkceChallenge(verifier: string): Promise<string> {
 // "code" mode survives the trip through Safari, so the verifier must outlive the tab.
 const verifierStore = (mode: Mode) => (mode === 'code' ? localStorage : sessionStorage)
 
-export async function startLogin(app: DropboxApp, mode: Mode): Promise<void> {
+// forceReauth: Dropbox asks for the account again instead of reusing the one signed in on dropbox.com.
+export async function startLogin(app: DropboxApp, mode: Mode, options: { forceReauth?: boolean } = {}): Promise<void> {
   const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)))
   verifierStore(mode).setItem(verifierKey(app), verifier)
   const params = new URLSearchParams({
@@ -39,6 +41,7 @@ export async function startLogin(app: DropboxApp, mode: Mode): Promise<void> {
     token_access_type: 'offline',
   })
   if (mode === 'redirect') params.set('redirect_uri', REDIRECT_URI)
+  if (options.forceReauth) params.set('force_reauthentication', 'true')
   const url = `https://www.dropbox.com/oauth2/authorize?${params}`
   if (mode === 'redirect') location.assign(url)
   else window.open(url, '_blank')
@@ -54,7 +57,7 @@ async function postToken(app: DropboxApp, params: Record<string, string>) {
     }
     throw new Error(json.error_description ?? json.error ?? `HTTP ${res.status}`)
   }
-  return json as { access_token: string; expires_in: number; refresh_token?: string }
+  return json as { access_token: string; expires_in: number; refresh_token?: string; account_id?: string }
 }
 
 function save(app: DropboxApp, auth: StoredAuth) {
@@ -78,6 +81,7 @@ export async function finishLogin(app: DropboxApp, code: string, mode: Mode): Pr
     refreshToken: json.refresh_token!,
     accessToken: json.access_token,
     expiresAt: Date.now() + json.expires_in * 1000,
+    accountId: json.account_id,
   })
 }
 
@@ -97,6 +101,16 @@ export async function getAccessToken(app: DropboxApp): Promise<string> {
 }
 
 export const isLoggedIn = (app: DropboxApp) => load(app) !== null
+
+export const accountOf = (app: DropboxApp) => load(app)?.accountId ?? null
+
+// Dropbox comes back with ?error=…&state=<app> when the user refuses or something fails on its side.
+export function loginErrorFromUrl(params: URLSearchParams): { app: DropboxApp; message: string } | null {
+  const error = params.get('error')
+  const app = params.get('state')
+  if (!error || (app !== 'library' && app !== 'sync')) return null
+  return { app, message: error === 'access_denied' ? 'Connexion annulée.' : `Dropbox : ${params.get('error_description') ?? error}` }
+}
 
 export function logout(app: DropboxApp) {
   localStorage.removeItem(authKey(app))
