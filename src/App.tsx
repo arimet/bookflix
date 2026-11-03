@@ -13,6 +13,7 @@ import { TopBar, type ProfileAction } from './components/TopBar'
 import { buildSeries, findSeries, seriesOfBook } from './library/catalog'
 import { allBooks, buildTree, type Book } from './library/library'
 import { listOffline, removeOffline, saveOffline } from './offline/offline'
+import { reloadIfUpdated } from './update'
 import { parseHash, seriesHref, type Route } from './routes'
 import { HistoryScreen, HomeScreen, KindScreen, SearchScreen } from './screens/BrowseScreens'
 import { RequestsScreen } from './screens/RequestsScreen'
@@ -106,6 +107,7 @@ export default function App() {
   useEffect(() => {
     const onHash = () => {
       navigatedInApp.current = true
+      if (!inFlight.current.size) reloadIfUpdated()
       const next = parseHash(location.hash)
       setRoute(next)
       if (isBase(next)) setBase(next)
@@ -182,6 +184,7 @@ export default function App() {
       if (offline.has(book.id)) await removeOffline(book)
       else {
         setDownloads((d) => ({ ...d, [book.id]: 0 }))
+        setNotice(`Téléchargement de « ${book.title} »…`)
         // One update per percent: progress events come for every network chunk.
         await saveOffline(book, (share) =>
           setDownloads((d) => (Math.floor(share * 100) === Math.floor((d[book.id] ?? 0) * 100) ? d : { ...d, [book.id]: share })))
@@ -189,6 +192,7 @@ export default function App() {
       }
       setOffline(await listOffline())
     } catch (e) {
+      setNotice(null)
       onError((e as Error)?.name === 'QuotaExceededError' ? new Error(`Plus assez de place sur l'appareil pour « ${book.title} ».`) : e)
     } finally {
       inFlight.current.delete(book.id)
@@ -339,9 +343,9 @@ export default function App() {
         <>
           <TopBar active={base.name === 'kind' ? base.kind : base.name} profile={profile} query={query} onQuery={setQuery}
             onAction={onProfileAction} />
-          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} onRemoveOffline={toggleOffline}
+          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} onToggleOffline={toggleOffline}
             libraryName={folderName(libraryRoot)} onChangeFolder={changeFolder} />}
-          {base.name === 'history' && <HistoryScreen series={series} progress={progress} onReset={resetBook} />}
+          {base.name === 'history' && <HistoryScreen series={series} progress={progress} offline={offline} onReset={resetBook} onToggleOffline={toggleOffline} />}
           {base.name === 'requests' && profile && (
             <RequestsScreen profile={profile} profiles={profiles} requests={requests} onError={onError}
               onRequest={(book, note) => withRequests(addRequest(profile.id, book, note).then(() => setNotice('Demande envoyée.')))}

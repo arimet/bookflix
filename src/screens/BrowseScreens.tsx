@@ -10,7 +10,7 @@ import { heroPick, newestBook, ofKind, readingHistory, readingNow, recentlyAdded
 import type { Book } from '../library/library'
 import type { ProgressMap } from '../sync/progress'
 
-type Data = { series: Series[] | null; progress: ProgressMap; offline: Set<string>; onReset: (book: Book) => void; onRemoveOffline: (book: Book) => void }
+type Data = { series: Series[] | null; progress: ProgressMap; offline: Set<string>; onReset: (book: Book) => void; onToggleOffline: (book: Book) => void }
 
 // "Boruto · Tome 02" when the book belongs to a series of several volumes
 const bookLabel = (series: Series[], b: Book) => {
@@ -19,7 +19,7 @@ const bookLabel = (series: Series[], b: Book) => {
 }
 
 
-export function HomeScreen({ series, progress, offline, onReset, onRemoveOffline, libraryName, onChangeFolder }: Data & { libraryName: string; onChangeFolder: () => void }) {
+export function HomeScreen({ series, progress, offline, onReset, onToggleOffline, libraryName, onChangeFolder }: Data & { libraryName: string; onChangeFolder: () => void }) {
   if (!series) return <LibrarySkeleton />
   if (!series.length) {
     return (
@@ -37,7 +37,8 @@ export function HomeScreen({ series, progress, offline, onReset, onRemoveOffline
   const card = (b: Book) => (
     <BookCard key={b.id} book={b} label={label(b)} percent={progress[b.id]?.percent}
       onReset={(progress[b.id]?.percent ?? 0) > 0 ? () => onReset(b) : undefined}
-      onRemoveOffline={offline.has(b.id) ? () => onRemoveOffline(b) : undefined} />
+      onDownload={offline.has(b.id) ? undefined : () => onToggleOffline(b)}
+      onRemoveOffline={offline.has(b.id) ? () => onToggleOffline(b) : undefined} />
   )
   return (
     <Box pb="16">
@@ -83,7 +84,7 @@ export function SearchScreen({ series, query }: { series: Series[] | null; query
 
 const when = new Intl.DateTimeFormat('fr', { dateStyle: 'medium', timeStyle: 'short' })
 
-export function HistoryScreen({ series, progress, onReset }: Omit<Data, 'offline' | 'onRemoveOffline'>) {
+export function HistoryScreen({ series, progress, offline, onReset, onToggleOffline }: Data) {
   if (!series) return <LibrarySkeleton />
   const items = readingHistory(series, progress)
   return (
@@ -92,7 +93,8 @@ export function HistoryScreen({ series, progress, onReset }: Omit<Data, 'offline
       <Stack gap="0" maxW="3xl">
         {items.map(({ book, series: s, entry }) => (
           <Flex key={book.id} gap="4" align="center" py="3" borderTop="1px solid #2e2e2e" position="relative">
-            <BookMenu title={book.title} onReset={() => onReset(book)} button={{ top: 'calc(50% - 0.75rem)', right: '0' }}>
+            <BookMenu title={book.title} onReset={() => onReset(book)} onDownload={offline.has(book.id) ? undefined : () => onToggleOffline(book)}
+              onRemoveOffline={offline.has(book.id) ? () => onToggleOffline(book) : undefined} button={{ top: 'calc(50% - 0.75rem)', right: '0' }}>
               <chakra.a href={readHref(book)} display="flex" gap="4" alignItems="center" flex="1" minW="0" pr="10">
                 <Box w="12" flexShrink={0}><BookCover book={book} small percent={entry.percent} /></Box>
                 <Stack gap="0.5" minW="0">
