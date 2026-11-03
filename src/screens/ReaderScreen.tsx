@@ -1,6 +1,7 @@
 import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react'
 import { DebugLog, DEBUG } from '../components/DebugLog'
 import { Loader } from '../components/Loader'
+import { PageIndicator } from '../components/PageIndicator'
 import { Shell } from '../components/PinDialogs'
 import { ZoomPageBar } from '../components/ZoomPageBar'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
@@ -175,6 +176,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
         left="env(safe-area-inset-left)" right="env(safe-area-inset-right)">
         <ReactReader
           reader={reader}
+          enableFloatingProgress={false}
           settings={settings}
           onSettingsChange={(changes) => setSettings((old) => ({ ...old, ...changes }))}
           onItemClick={(item) => {
@@ -195,6 +197,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
             bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
             <Loader />
           </Box>
+          <PageIndicator reader={reader} chapters={book.format === 'epub'} />
           <ZoomPageBar reader={reader} />
         </ReactReader>
       </Box>
