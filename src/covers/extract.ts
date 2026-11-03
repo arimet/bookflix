@@ -37,8 +37,8 @@ async function epubCover(archive: Archive): Promise<Blob | null> {
 }
 
 async function pdfCover(blob: Blob): Promise<Blob | null> {
-  const { pdfjsLib } = await import('../reader/pdf')
-  const task = pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) })
+  const { openPdf } = await import('../reader/pdf')
+  const task = openPdf(blob)
   const doc = await task.promise
   const page = await doc.getPage(1)
   const viewport = page.getViewport({ scale: COVER_WIDTH / page.getViewport({ scale: 1 }).width })
