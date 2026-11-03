@@ -6,7 +6,7 @@ import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
-import type { AppReader } from '../reader/createAppReader'
+import { markSpineItemOnScreen, type AppReader } from '../reader/createAppReader'
 import { openReader } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookDirection, type Direction } from '../sync/books'
 import { positionRecorder } from '../sync/positionRecorder'
@@ -57,6 +57,12 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
   useEffect(() => {
     reader?.theme.set(layout.theme)
   }, [reader, layout.theme])
+
+  useEffect(() => {
+    if (!reader) return
+    const sub = markSpineItemOnScreen(reader)
+    return () => sub.unsubscribe()
+  }, [reader])
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))

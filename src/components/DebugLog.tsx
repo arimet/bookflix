@@ -1,6 +1,6 @@
 import { Box } from '@chakra-ui/react'
 import { useEffect, useRef, useState } from 'react'
-import type { AppReader } from '../reader/createAppReader'
+import { currentSpineItem, type AppReader } from '../reader/createAppReader'
 
 // With "?debug" in the address, the reader lists what it loads and unloads, and when the service worker
 // reopens the book: a way to see what happens on a phone we cannot run here. The lines survive a reload,
@@ -41,8 +41,7 @@ export function DebugLog({ reader }: { reader?: AppReader }) {
       add(`item ${item.index} ${item.value.loadStatus}${item.value.loadStatus === 'loaded' ? ` ${item.containerElement?.offsetWidth}px` : ''}`))
     // A turn that starts and never ends is where Safari killed the page.
     const turns = reader.navigation.navigationState$.subscribe((state) => {
-      const at = reader.navigation.getNavigation().spineItem
-      const item = reader.spineItemsManager.items.find((i) => i.index === at || i.item.id === at)
+      const item = currentSpineItem(reader)
       add(`turn ${state === 'busy' ? 'start' : 'end'} item ${item?.index} ${item?.containerElement?.offsetWidth}px`)
     })
     return () => {

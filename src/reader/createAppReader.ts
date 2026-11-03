@@ -11,3 +11,21 @@ export const createAppReader = refitEnhancer(galleryEnhancer(gesturesEnhancer(cb
 export const createPdfReader = refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(createReader)))))
 
 export type AppReader = ReturnType<typeof createAppReader>
+
+// The spine item (chapter, or comic page) on screen.
+export function currentSpineItem(reader: AppReader) {
+  const at = reader.navigation.getNavigation().spineItem
+  return reader.spineItemsManager.items.find((item) => item.index === at || item.item.id === at)
+}
+
+// Marks the spine item on screen with data-on-screen, so that only its loading screen shows a turning ring.
+export function markSpineItemOnScreen(reader: AppReader) {
+  let marked: HTMLElement | undefined
+  return reader.navigation.navigation$.subscribe(() => {
+    const element = currentSpineItem(reader)?.containerElement
+    if (element === marked) return
+    marked?.removeAttribute('data-on-screen')
+    element?.setAttribute('data-on-screen', '')
+    marked = element
+  })
+}
