@@ -4,7 +4,7 @@ import { BookMenu } from '../components/BookMenu'
 import { LibrarySkeleton } from '../components/Loader'
 import { readHref } from '../routes'
 import { BookCard, SeriesCard, SeriesGrid } from '../components/Cards'
-import { Hero } from '../components/Hero'
+import { COVER_SPACE, Hero } from '../components/Hero'
 import { Row } from '../components/Row'
 import { heroPick, newestBook, ofKind, readingHistory, readingNow, recentlyAdded, searchLibrary, seriesOfBook, type Kind, type Series } from '../library/catalog'
 import type { Book } from '../library/library'
@@ -42,8 +42,9 @@ export function HomeScreen({ series, progress, offline, onReset, onRemoveOffline
   return (
     <Box pb="16">
       {hero && <Hero series={hero.series} book={hero.book} percent={progress[hero.book.id]?.percent ?? 0} />}
-      <Stack gap={{ base: 6, md: 10 }} mt={{ base: -6, md: -16 }} position="relative">
-        <Row title="Reprendre la lecture">
+      <Stack gap={{ base: 6, md: 10 }} mt={{ base: -6, md: -16 }} position="relative"
+        css={hero ? { '& > section:first-of-type': { w: { md: `calc(100% - ${COVER_SPACE})` } } } : undefined}>
+        <Row title="Reprendre la lecture" small>
           {readingNow(series, progress).slice(0, 20).map(card)}
         </Row>
         <Row title="Téléchargés">

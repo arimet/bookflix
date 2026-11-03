@@ -11,7 +11,7 @@ export const FullLoader = () => <Box minH="100dvh" display="grid" placeItems="ce
 export function LibrarySkeleton() {
   return (
     <Box pb="16" overflow="hidden" role="status" aria-label="Chargement de la bibliothèque">
-      <Box h={{ base: '78vh', md: '82vh' }} minH={{ base: '560px', md: '520px' }} bg="linear-gradient(0deg, #141414, #1c1c1c)" />
+      <Box h={{ base: '78vh', md: 'min(54vh, 540px)' }} minH={{ base: '560px', md: '380px' }} bg="linear-gradient(0deg, #141414, #1c1c1c)" />
       <Stack gap={{ base: 6, md: 10 }} mt={{ base: -6, md: -16 }} position="relative">
         {[0, 1, 2].map((row) => (
           <Box key={row} px={{ base: 4, md: 12 }}>

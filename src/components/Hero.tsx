@@ -10,6 +10,11 @@ import { readHref, seriesHref } from '../routes'
 
 type Props = { series: Series; book: Book; percent: number }
 
+const COVER_W = 'min(22vw, 300px)'
+const COVER_END = 'max(0px, calc(50vw - 40rem))'
+// What the first row below leaves free on the right for the cover, on a wide screen.
+export const COVER_SPACE = `calc(3rem + ${COVER_END} + ${COVER_W} + 2rem)`
+
 // "Naruto - Tome 01" under the "Naruto" title reads as "Tome 01".
 const volumeName = (series: Series, book: Book) =>
   book.title.startsWith(series.title) ? book.title.slice(series.title.length).replace(/^[\s\-–—·:,]+/, '') || book.title : book.title
@@ -23,7 +28,7 @@ export function Hero({ series, book, percent }: Props) {
   const started = percent > 0
 
   return (
-    <Box ref={ref} position="relative" h={{ base: '78vh', md: '82vh' }} minH={{ base: '560px', md: '520px' }} overflow="hidden" isolation="isolate"
+    <Box ref={ref} position="relative" h={{ base: '78vh', md: 'min(54vh, 540px)' }} minH={{ base: '560px', md: '380px' }} overflow={{ base: 'hidden', md: 'visible' }}
       bg="radial-gradient(ellipse at 70% 30%, #5a1418, #141414 70%)">
       {backdrop && (
         // Faded out at the bottom: its edge would otherwise show as a line on a fractional pixel.
@@ -41,13 +46,14 @@ export function Hero({ series, book, percent }: Props) {
           md: 'linear-gradient(90deg, #141414 5%, rgba(20,20,20,.7) 35%, rgba(20,20,20,.1) 70%), linear-gradient(0deg, #141414, transparent 35%), linear-gradient(180deg, rgba(20,20,20,.6), transparent 20%)',
         }} />
       <Flex position="absolute" inset="0" px={{ base: 4, md: 12 }}
-        pt={{ base: 'calc(env(safe-area-inset-top) + 7rem)', md: '24' }} pb={{ base: 10, md: 24 }}
+        pt={{ base: 'calc(env(safe-area-inset-top) + 7rem)', md: '20' }} pb={{ base: 10, md: 24 }}
         direction={{ base: 'column', md: 'row-reverse' }} align={{ base: 'center', md: 'flex-end' }}
         justify={{ base: 'flex-end', md: 'space-between' }} gap={{ base: 6, md: 16 }}>
         {cover && (
-          // The text stays in line with the rows below; on a wide screen the cover comes towards it.
-          <Image src={cover} alt="" flexShrink="1" minH="0" w="auto" h="auto" maxH={{ base: '36vh', md: 'min(64vh, 560px)' }}
-            maxW={{ base: '60%', md: '40%' }} me={{ md: 'max(0px, calc(50vw - 40rem))' }}
+          // The text stays in line with the rows below; on a wide screen the cover comes towards it and runs
+          // down beside the first row, which leaves it that space (COVER_SPACE).
+          <Image src={cover} alt="" flexShrink="1" minH="0" w={{ base: 'auto', md: COVER_W }} h="auto" maxH={{ base: '36vh', md: 'none' }}
+            maxW={{ base: '60%', md: 'none' }} me={{ md: COVER_END }} alignSelf={{ md: 'flex-start' }} position="relative" zIndex="1"
             rounded="md" outline="1px solid rgba(255,255,255,.08)" outlineOffset="-1px"
             shadow="0 40px 80px -24px rgba(0,0,0,.9), 0 12px 32px rgba(0,0,0,.5)"
             animation="rise .7s cubic-bezier(.16,1,.3,1) both" css={{ '@media (prefers-reduced-motion: reduce)': { animation: 'none' } }} />
