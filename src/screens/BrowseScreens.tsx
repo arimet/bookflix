@@ -1,10 +1,9 @@
-import { Box, chakra, Flex, Heading, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, chakra, Flex, Heading, Stack, Text } from '@chakra-ui/react'
 import { BookCover } from '../components/BookCover'
 import { BookMenu } from '../components/BookMenu'
 import { LibrarySkeleton } from '../components/Loader'
 import { readHref } from '../routes'
 import { BookCard, SeriesCard, SeriesGrid } from '../components/Cards'
-import { LIBRARY_NAME } from '../config'
 import { Hero } from '../components/Hero'
 import { Row } from '../components/Row'
 import { heroPick, newestBook, ofKind, readingHistory, readingNow, recentlyAdded, searchLibrary, seriesOfBook, type Kind, type Series } from '../library/catalog'
@@ -20,12 +19,15 @@ const bookLabel = (series: Series[], b: Book) => {
 }
 
 
-export function HomeScreen({ series, progress, offline, onReset, onRemoveOffline }: Data) {
+export function HomeScreen({ series, progress, offline, onReset, onRemoveOffline, libraryName, onChangeFolder }: Data & { libraryName: string; onChangeFolder: () => void }) {
   if (!series) return <LibrarySkeleton />
   if (!series.length) {
     return (
       <Box minH="100dvh" display="grid" placeItems="center" p="6" textAlign="center">
-        <Text color="muted">Aucun livre dans le dossier {LIBRARY_NAME} de ton Dropbox (EPUB, CBZ, CBR ou PDF).</Text>
+        <Stack gap="3" align="center">
+          <Text color="muted">Aucun livre dans le dossier {libraryName} de ton Dropbox (EPUB, CBZ, CBR ou PDF).</Text>
+          <Button variant="outline" size="sm" onClick={onChangeFolder}>Changer de dossier</Button>
+        </Stack>
       </Box>
     )
   }

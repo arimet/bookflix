@@ -9,6 +9,5 @@ export type DropboxApp = keyof typeof APP_KEYS
 
 // The books folder proposed by default; each household can pick another one, kept in its sync folder (libraryRoot.ts).
 export const LIBRARY_ROOT = import.meta.env.VITE_LIBRARY_ROOT || '/Ebook'
-export const LIBRARY_NAME = LIBRARY_ROOT.split('/').filter(Boolean).pop() ?? 'Dropbox'
 
 export const REDIRECT_URI = location.origin + import.meta.env.BASE_URL

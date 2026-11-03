@@ -35,3 +35,6 @@ export async function resolveLibraryRoot(): Promise<{ root: string } | { pick: t
 export const folderName = (root: string) => root.split('/').filter(Boolean).pop() ?? 'Dropbox'
 
 export const isMissingFolder = (e: unknown) => e instanceof DropboxError && e.status === 409 && e.message.startsWith('path/not_found')
+
+// Signing out forgets this device's copy; the setting itself stays in the Dropbox.
+export const forgetLibraryRoot = () => localStorage.removeItem(KEY)

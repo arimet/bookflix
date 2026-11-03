@@ -20,8 +20,10 @@ import { addRequest, availableMatches, loadRequests, removeRequest, updateReques
 import { LoginScreen } from './screens/LoginScreen'
 import { ProfilesScreen } from './screens/ProfilesScreen'
 import { ReaderScreen } from './screens/ReaderScreen'
-import { cachedLibraryRoot } from './sync/libraryRoot'
-import { getCurrentProfileId, loadProfiles, setCurrentProfileId, updateProfile, type Profile } from './sync/profiles'
+import { cachedLibraryRoot, folderName, forgetLibraryRoot, isMissingFolder, resolveLibraryRoot, saveLibraryRoot } from './sync/libraryRoot'
+import { FolderPicker } from './screens/FolderPicker'
+import { Shell } from './components/PinDialogs'
+import { folderAccess, getCurrentProfileId, loadProfiles, setCurrentProfileId, updateProfile, type Profile } from './sync/profiles'
 import { deviceName, flushPending, loadProgress, localProgress, resetProgress, type ProgressMap } from './sync/progress'
 
 // Screens a series sheet can open over; the sheet and the reader are not.
@@ -58,6 +60,10 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null)
   const [pinOpen, setPinOpen] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
+  // The household's books folder: null until known (first run), then picked or found (libraryRoot.ts).
+  const [libraryRoot, setLibraryRoot] = useState(cachedLibraryRoot)
+  const [picking, setPicking] = useState<{ message?: string; cancellable: boolean } | null>(null)
+  const [adminOnly, setAdminOnly] = useState(false)
   const [requests, setRequests] = useState<BookRequest[] | null>(null)
   // Books being downloaded, with the share done: kept here so leaving the series sheet does not lose it.
   const [downloads, setDownloads] = useState<Record<string, number>>({})
@@ -106,22 +112,30 @@ export default function App() {
   }, [])
 
   const loggedIn = connected.library && connected.sync
-  const ready = loggedIn && !!profileId
+  const ready = loggedIn && !!profileId && libraryRoot !== null
+
+  useEffect(() => {
+    if (!loggedIn || libraryRoot !== null) return
+    resolveLibraryRoot().then((found) => ('root' in found ? setLibraryRoot(found.root) : setPicking({ cancellable: false })), onError)
+  }, [loggedIn, libraryRoot, onError])
 
   useEffect(() => {
     if (!ready) return
     loadProfiles().then(setProfiles, onError)
     listOffline().then(setOffline, onError)
     // The cached listing shows at once; Dropbox then only sends what changed since.
-    listLibrary(cachedLibraryRoot() ?? LIBRARY_ROOT, cachedLibrary() ?? undefined).then((listing) => {
+    listLibrary(libraryRoot, cachedLibrary() ?? undefined).then((listing) => {
       localStorage.setItem(LIBRARY_KEY, JSON.stringify(listing))
       setLibrary(listing)
-    }, (e) => (e instanceof TypeError ? undefined : onError(e)))
+    }, (e) => {
+      if (isMissingFolder(e)) setPicking({ message: `Le dossier ${folderName(libraryRoot)} n'existe plus dans ton Dropbox.`, cancellable: false })
+      else if (!(e instanceof TypeError)) onError(e)
+    })
     const flush = () => flushPending(profileId).catch((e) => (e instanceof TypeError ? undefined : onError(e)))
     flush()
     addEventListener('online', flush)
     return () => removeEventListener('online', flush)
-  }, [ready, profileId, onError])
+  }, [ready, profileId, libraryRoot, onError])
 
   // Reload progress whenever we land on a folder, e.g. coming back from the reader.
   useEffect(() => {
@@ -164,12 +178,12 @@ export default function App() {
     }
   }
 
-  // Lists /Ebook from scratch (no cursor), then profiles, progress and downloads.
+  // Lists the books folder from scratch (no cursor), then profiles, progress and downloads.
   const reload = async () => {
-    if (!profileId) return
+    if (!profileId || libraryRoot === null) return
     setNotice('Rechargement…')
     try {
-      const listing = await listLibrary(cachedLibraryRoot() ?? LIBRARY_ROOT)
+      const listing = await listLibrary(libraryRoot)
       localStorage.setItem(LIBRARY_KEY, JSON.stringify(listing))
       setLibrary(listing)
       setProfiles(await loadProfiles())
@@ -188,6 +202,8 @@ export default function App() {
     logout('sync')
     localStorage.removeItem(LIBRARY_KEY)
     setLibrary(null)
+    forgetLibraryRoot()
+    setLibraryRoot(null)
     pickProfile(null)
     setConnected(connectedApps())
   } })
@@ -206,7 +222,30 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [notice])
 
+  // A new folder: the old listing and its cursor are of no use, the load effect lists the new one.
+  const pickFolder = (root: string) =>
+    saveLibraryRoot(root).then(() => {
+      localStorage.removeItem(LIBRARY_KEY)
+      setLibrary(null)
+      setLibraryRoot(root)
+      setPicking(null)
+    }, onError)
+
+  const becomeAdmin = (profile: Profile, then?: () => void) => setConfirming({
+    title: 'Devenir admin ?', text: `${profile.name} suivra les demandes de tous les profils. Pense à lui mettre un code PIN.`,
+    action: 'Devenir admin', onOk: () => updateProfile(profile.id, { admin: true }).then(loadProfiles).then((p) => { setProfiles(p); then?.() }, onError),
+  })
+
+  const changeFolder = () => {
+    if (!profile) return
+    const access = folderAccess(profile, profiles)
+    if (access === 'change') setPicking({ cancellable: true })
+    if (access === 'ask-admin') setAdminOnly(true)
+    if (access === 'become-admin') becomeAdmin(profile, () => setPicking({ cancellable: true }))
+  }
+
   const onProfileAction = (action: ProfileAction) => {
+    if (action === 'folder') changeFolder()
     if (action === 'history') location.hash = '#/historique'
     if (action === 'reload') reload()
     if (action === 'pin') setPinOpen(true)
@@ -252,6 +291,11 @@ export default function App() {
       ) : !loggedIn ? (
         <LoginScreen connected={connected} error={loginError} onDone={() => { setLoginError(null); setConnected(connectedApps()) }}
           onError={onError} />
+      ) : picking ? (
+        <FolderPicker initial={picking.cancellable ? libraryRoot ?? '' : ''} message={picking.message} onPick={pickFolder}
+          onCancel={picking.cancellable ? () => setPicking(null) : undefined} onError={onError} />
+      ) : libraryRoot === null ? (
+        <FullLoader />
       ) : !profileId ? (
         <ProfilesScreen onPick={(p) => pickProfile(p.id)} onError={onError} />
       ) : readingBook ? (
@@ -268,17 +312,15 @@ export default function App() {
         <>
           <TopBar active={base.name === 'kind' ? base.kind : base.name} profile={profile} query={query} onQuery={setQuery}
             onAction={onProfileAction} />
-          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} onRemoveOffline={toggleOffline} />}
+          {base.name === 'home' && <HomeScreen series={series} progress={progress} offline={offline} onReset={resetBook} onRemoveOffline={toggleOffline}
+            libraryName={folderName(libraryRoot)} onChangeFolder={changeFolder} />}
           {base.name === 'history' && <HistoryScreen series={series} progress={progress} onReset={resetBook} />}
           {base.name === 'requests' && profile && (
             <RequestsScreen profile={profile} profiles={profiles} requests={requests} onError={onError}
               onRequest={(book, note) => withRequests(addRequest(profile.id, book, note).then(() => setNotice('Demande envoyée.')))}
               onUpdate={(id, changes) => withRequests(updateRequest(id, changes))}
               onRemove={(id) => withRequests(removeRequest(id))}
-              onBecomeAdmin={() => setConfirming({
-                title: 'Devenir admin ?', text: `${profile.name} suivra les demandes de tous les profils. Pense à lui mettre un code PIN.`,
-                action: 'Devenir admin', onOk: () => updateProfile(profile.id, { admin: true }).then(loadProfiles).then(setProfiles, onError),
-              })} />
+              onBecomeAdmin={() => becomeAdmin(profile)} />
           )}
           {base.name === 'kind' && <KindScreen series={series} kind={base.kind} />}
           {base.name === 'search' && <SearchScreen series={series} query={query} />}
@@ -297,6 +339,12 @@ export default function App() {
         </>
       )}
       {confirming && <ConfirmDialog {...confirming} onClose={() => setConfirming(null)} />}
+      {adminOnly && (
+        <Shell title="Dossier des livres" onClose={() => setAdminOnly(false)}>
+          <Text color="muted">Seul l'admin peut changer le dossier des livres.</Text>
+          <Button mt="6" w="full" onClick={() => setAdminOnly(false)}>OK</Button>
+        </Shell>
+      )}
       {notice && !error && (
         <Stack position="fixed" bottom="4" insetX="4" mx="auto" maxW="sm" p="3" rounded="md" bg="panel" direction="row" align="center" zIndex="20">
           <Text flex="1" fontSize="sm">{notice}</Text>

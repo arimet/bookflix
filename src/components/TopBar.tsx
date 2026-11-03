@@ -12,7 +12,7 @@ const TABS: { tab: Tab; label: string; href: string }[] = [
   { tab: 'requests', label: 'Demandes', href: '#/demandes' },
 ]
 
-export type ProfileAction = 'history' | 'reload' | 'avatar' | 'pin' | 'switch' | 'logout'
+export type ProfileAction = 'history' | 'reload' | 'folder' | 'avatar' | 'pin' | 'switch' | 'logout'
 type Props = { active: Tab; profile: Profile | undefined; query: string; onQuery: (q: string) => void; onAction: (a: ProfileAction) => void }
 
 export function TopBar({ active, profile, query, onQuery, onAction }: Props) {
@@ -54,6 +54,7 @@ export function TopBar({ active, profile, query, onQuery, onAction }: Props) {
           <Menu.Content bg="rgba(0,0,0,.92)" color="white" borderColor="#333" minW="56">
             <Menu.Item value="history">Historique de lecture</Menu.Item>
             <Menu.Item value="reload">Recharger la bibliothèque</Menu.Item>
+            <Menu.Item value="folder">Dossier des livres</Menu.Item>
             <Menu.Item value="avatar">Changer d'avatar</Menu.Item>
             <Menu.Item value="pin">Code PIN du profil</Menu.Item>
             <Menu.Separator borderColor="#333" />

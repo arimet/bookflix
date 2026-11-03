@@ -59,3 +59,7 @@ export function setCurrentProfileId(id: string | null) {
   if (id) localStorage.setItem(CURRENT_KEY, id)
   else localStorage.removeItem(CURRENT_KEY)
 }
+
+// The books folder is the household's: only its admin moves it. With no admin yet, whoever asks can become it.
+export const folderAccess = (profile: Profile, profiles: Profile[]): 'change' | 'ask-admin' | 'become-admin' =>
+  profile.admin ? 'change' : profiles.some((p) => p.admin) ? 'ask-admin' : 'become-admin'

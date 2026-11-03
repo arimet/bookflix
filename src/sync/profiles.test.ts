@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest'
 import { readJson, writeJson } from '../dropbox/api'
-import { addProfile, checkPin, setProfilePin, updateProfile, type Profile } from './profiles'
+import { addProfile, checkPin, folderAccess, setProfilePin, updateProfile, type Profile } from './profiles'
 
 vi.mock('../dropbox/api', () => ({ readJson: vi.fn(), writeJson: vi.fn() }))
 
@@ -60,4 +60,12 @@ test('updateProfile can mark a profile as admin', async () => {
   vi.mocked(readJson).mockResolvedValue([anna, ben])
   await updateProfile('a', { admin: true })
   expect((vi.mocked(writeJson).mock.calls[0][1] as Profile[])[0]).toEqual({ ...anna, admin: true })
+})
+
+test('only the admin changes the books folder; without an admin, the profile is offered the role', () => {
+  const me = { id: 'me', name: 'Moi', color: '#000' }
+  const admin = { id: 'a', name: 'Admin', color: '#000', admin: true }
+  expect(folderAccess({ ...me, admin: true }, [{ ...me, admin: true }])).toBe('change')
+  expect(folderAccess(me, [me, admin])).toBe('ask-admin')
+  expect(folderAccess(me, [me])).toBe('become-admin')
 })
