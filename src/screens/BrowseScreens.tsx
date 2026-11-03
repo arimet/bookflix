@@ -1,10 +1,12 @@
 import { Box, Button, chakra, Flex, Heading, Stack, Text } from '@chakra-ui/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { BookCover } from '../components/BookCover'
 import { BookMenu } from '../components/BookMenu'
 import { LibrarySkeleton } from '../components/Loader'
 import { readHref } from '../routes'
 import { BookCard, SeriesCard, SeriesGrid } from '../components/Cards'
 import { COVER_SPACE, Hero } from '../components/Hero'
+import { popInOut } from '../components/motion'
 import { Row } from '../components/Row'
 import { heroPick, newestBook, ofKind, readingHistory, readingNow, recentlyAdded, searchLibrary, seriesOfBook, type Kind, type Series } from '../library/catalog'
 import type { Book } from '../library/library'
@@ -90,9 +92,11 @@ export function HistoryScreen({ series, progress, offline, onReset, onToggleOffl
   return (
     <Page title="Historique de lecture">
       {!items.length && <Text color="muted">Aucun livre ouvert pour l'instant.</Text>}
-      <Stack gap="0" maxW="3xl">
+      <Stack gap="0" maxW="3xl" position="relative">
+        <AnimatePresence mode="popLayout" initial={false}>
         {items.map(({ book, series: s, entry }) => (
-          <Flex key={book.id} gap="4" align="center" py="3" borderTop="1px solid #2e2e2e" position="relative">
+          <motion.div key={book.id} {...popInOut}>
+          <Flex gap="4" align="center" py="3" borderTop="1px solid #2e2e2e" position="relative">
             <BookMenu title={book.title} onReset={() => onReset(book)} onDownload={offline.has(book.id) ? undefined : () => onToggleOffline(book)}
               onRemoveOffline={offline.has(book.id) ? () => onToggleOffline(book) : undefined} button={{ top: 'calc(50% - 0.75rem)', right: '0' }}>
               <chakra.a href={readHref(book)} display="flex" gap="4" alignItems="center" flex="1" minW="0" pr="10">
@@ -106,7 +110,9 @@ export function HistoryScreen({ series, progress, offline, onReset, onToggleOffl
               </chakra.a>
             </BookMenu>
           </Flex>
+          </motion.div>
         ))}
+        </AnimatePresence>
       </Stack>
     </Page>
   )

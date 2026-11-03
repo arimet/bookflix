@@ -1,5 +1,7 @@
 import { Box, Button, chakra, CloseButton, type BoxProps, Dialog, Flex, Heading, Image, Input, InputGroup, SimpleGrid, Stack, Text, Textarea } from '@chakra-ui/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Loader } from '../components/Loader'
+import { foldInOut, popInOut } from '../components/motion'
 import { useEffect, useState } from 'react'
 import { LuInbox, LuPlay, LuSearch } from 'react-icons/lu'
 import { Avatar } from '../components/Avatar'
@@ -184,12 +186,21 @@ function Fan({ books }: { books: BookInfo[] }) {
 }
 
 function Group({ title, requests, render }: { title: string; requests: BookRequest[]; render: (r: BookRequest) => React.ReactNode }) {
-  if (!requests.length) return null
   return (
-    <Box mt="8">
-      <Heading as="h3" fontSize="md" fontWeight="bold" mb="3">{title} <chakra.span color="muted" fontWeight="normal">{requests.length}</chakra.span></Heading>
-      <SimpleGrid columns={{ base: 1, lg: 2 }} gap="3">{requests.map(render)}</SimpleGrid>
-    </Box>
+    <AnimatePresence initial={false}>
+      {requests.length > 0 && (
+        <motion.div key="group" {...foldInOut}>
+          <Box pt="8">
+            <Heading as="h3" fontSize="md" fontWeight="bold" mb="3">{title} <chakra.span color="muted" fontWeight="normal">{requests.length}</chakra.span></Heading>
+            <SimpleGrid columns={{ base: 1, lg: 2 }} gap="3" position="relative">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {requests.map((r) => <motion.div key={r.id} {...popInOut}>{render(r)}</motion.div>)}
+              </AnimatePresence>
+            </SimpleGrid>
+          </Box>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
