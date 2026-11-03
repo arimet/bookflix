@@ -1,9 +1,9 @@
-import { Box, Text } from '@chakra-ui/react'
+import { Text } from '@chakra-ui/react'
 import { useEffect, useState } from 'react'
 import type { AppReader } from '../reader/createAppReader'
 import { pageLabel } from '../reader/pageLabel'
 
-// Replaces prose-reader's percentage, in the same corner and the same outlined lettering.
+// Replaces prose-reader's percentage, in the same outlined lettering.
 export function PageIndicator({ reader, chapters }: { reader?: AppReader; chapters: boolean }) {
   const [label, setLabel] = useState<string>()
 
@@ -18,9 +18,8 @@ export function PageIndicator({ reader, chapters }: { reader?: AppReader; chapte
 
   if (!label) return null
   return (
-    <Box position="absolute" right="0" bottom="0" p="2" pointerEvents="none" color="white" letterSpacing="1px"
-      css={{ WebkitTextStroke: '2px black', paintOrder: 'stroke fill' }}>
-      <Text fontSize="sm">{label}</Text>
-    </Box>
+    <Text fontSize="sm" ml="auto" color="white" letterSpacing="1px" css={{ WebkitTextStroke: '2px black', paintOrder: 'stroke fill' }}>
+      {label}
+    </Text>
   )
 }

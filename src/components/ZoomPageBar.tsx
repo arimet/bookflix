@@ -20,9 +20,8 @@ export function ZoomPageBar({ reader }: { reader?: AppReader }) {
 
   if (!reader || !zoomed) return null
   return (
-    // Bottom left, level with prose-reader's zoom slider on the right.
-    <HStack position="absolute" left="4" bottom="calc(24px + var(--chakra-spacing-4))" gap="1" p="0.5"
-      bg="bg.panel" shadow="sm" borderRadius="md" animationName="fade-in" animationDuration="moderate">
+    <HStack gap="1" p="0.5" pointerEvents="auto" bg="bg.panel" shadow="sm" borderRadius="md"
+      animationName="fade-in" animationDuration="moderate">
       <IconButton aria-label="Page de gauche" variant="ghost" size="sm" onClick={() => turnTowards(reader, 'left')}>
         <LuChevronLeft />
       </IconButton>

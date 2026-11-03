@@ -31,6 +31,9 @@ const THEMES: { theme: ReaderTheme; label: string; bg: string }[] = [
 const FULL_WIDTH = 100
 const columnWidth = (width: number) => (width >= FULL_WIDTH ? '100%' : `${width}rem`)
 const FLUSH_DELAY = 5000
+// prose-reader shows a zoom slider while zoomed in, with no setting to turn it off; pinching does the same.
+// ponytail: matches prose-reader's markup (the slider in a presence box right under the reader); recheck on upgrade.
+const HIDE_ZOOM_SLIDER = { '& [data-prose-react-reader] > [data-scope="presence"]:has(> [data-scope="slider"])': { display: 'none' } }
 
 type Props = { book: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void }
 
@@ -170,7 +173,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
   }
 
   return (
-    <Box position="fixed" inset="0" bg={THEMES.find((t) => t.theme === layout.theme)!.bg}>
+    <Box position="fixed" inset="0" bg={THEMES.find((t) => t.theme === layout.theme)!.bg} css={HIDE_ZOOM_SLIDER}>
       {/* Installed on iPhone the app draws under the status bar: keep the reader and its header out of it. */}
       <Box position="absolute" top="env(safe-area-inset-top)" bottom="env(safe-area-inset-bottom)"
         left="env(safe-area-inset-left)" right="env(safe-area-inset-right)">
@@ -197,8 +200,11 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
             bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
             <Loader />
           </Box>
-          <PageIndicator reader={reader} chapters={book.format === 'epub'} />
-          <ZoomPageBar reader={reader} />
+          {/* One line at the bottom: the page buttons while zoomed on the left, the page number on the right. */}
+          <Flex position="absolute" left="0" right="0" bottom="0" p="2" align="center" pointerEvents="none">
+            <ZoomPageBar reader={reader} />
+            <PageIndicator reader={reader} chapters={book.format === 'epub'} />
+          </Flex>
         </ReactReader>
       </Box>
       {DEBUG && <DebugLog reader={reader} />}
