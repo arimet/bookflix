@@ -2,6 +2,7 @@ import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react'
 import { DebugLog, DEBUG } from '../components/DebugLog'
 import { Loader } from '../components/Loader'
 import { Shell } from '../components/PinDialogs'
+import { ZoomPageBar } from '../components/ZoomPageBar'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
 import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -194,6 +195,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
             bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
             <Loader />
           </Box>
+          <ZoomPageBar reader={reader} />
         </ReactReader>
       </Box>
       {DEBUG && <DebugLog reader={reader} />}

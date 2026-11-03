@@ -80,13 +80,16 @@ export function turnTowards(reader: AppReader, side: 'left' | 'right') {
   else reader.navigation.turnRightOrBottom()
 }
 
+// Pinching back below 1 leaves zoom mode, but the reader can still be in it at scale 1.
+export const isZoomedIn = (state: { isZooming: boolean; currentScale: number }) => state.isZooming && state.currentScale > 1
+
 // prose-reader alone turns the page only on the outer 15 % of the book's column: a tap beside a comic page
 // opened the menu instead. Zoomed in or scrolling, taps keep prose-reader's meaning.
 export function turnOnSideTaps(reader: AppReader) {
   return reader.gestures.hooks.register('beforeTapGesture', ({ event$ }) =>
     event$.pipe(
       map(({ event }) => {
-        const zoomed = reader.zoom.state.isZooming && reader.zoom.state.currentScale > 1
+        const zoomed = isZoomedIn(reader.zoom.state)
         const side = 'x' in event.event ? tapSide(event.event.x, innerWidth) : null
         if (!side || zoomed || reader.settings.values.computedPageTurnMode === 'scrollable') return true
         turnTowards(reader, side)
