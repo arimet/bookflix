@@ -4,6 +4,7 @@ import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
 import { refitEnhancer } from '@prose-reader/enhancer-refit'
+import { map } from 'rxjs'
 
 // Same order as the prose-reader demo, minus annotations, search and audio (out of scope).
 // pdfEnhancer replaces getResource for every item, so it is only applied to PDF books.
@@ -36,4 +37,28 @@ export function whenPageOnScreenReady(reader: AppReader, onReady: () => void) {
   return reader.spineItemsObserver.itemStateChange$.subscribe(({ item, isReady }) => {
     if (isReady && item === currentSpineItem(reader)) onReady()
   })
+}
+
+// The outer thirds of the screen turn the page, the middle one is left to the menu.
+export const tapSide = (x: number, width: number) => (x < width / 3 ? 'left' : x > (width * 2) / 3 ? 'right' : null)
+
+export function turnTowards(reader: AppReader, side: 'left' | 'right') {
+  if (side === 'left') reader.navigation.turnLeftOrTop()
+  else reader.navigation.turnRightOrBottom()
+}
+
+// prose-reader alone turns the page only on the outer 15 % of the book's column: a tap beside a comic page
+// opened the menu instead. Zoomed in or scrolling, taps keep prose-reader's meaning.
+export function turnOnSideTaps(reader: AppReader) {
+  return reader.gestures.hooks.register('beforeTapGesture', ({ event$ }) =>
+    event$.pipe(
+      map(({ event }) => {
+        const zoomed = reader.zoom.state.isZooming && reader.zoom.state.currentScale > 1
+        const side = 'x' in event.event ? tapSide(event.event.x, innerWidth) : null
+        if (!side || zoomed || reader.settings.values.computedPageTurnMode === 'scrollable') return true
+        turnTowards(reader, side)
+        return false
+      }),
+    ),
+  )
 }

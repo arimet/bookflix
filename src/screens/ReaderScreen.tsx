@@ -7,7 +7,7 @@ import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
-import { markSpineItemOnScreen, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
+import { markSpineItemOnScreen, tapSide, turnOnSideTaps, turnTowards, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { openReader } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookDirection, type Direction } from '../sync/books'
 import { positionRecorder } from '../sync/positionRecorder'
@@ -65,9 +65,11 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
     if (!reader) return
     const marks = markSpineItemOnScreen(reader)
     const ready = whenPageOnScreenReady(reader, () => setDrawn(reader))
+    const unregisterTaps = turnOnSideTaps(reader)
     return () => {
       marks.unsubscribe()
       ready.unsubscribe()
+      unregisterTaps()
     }
   }, [reader])
 
@@ -179,7 +181,13 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
           }}
           slots={{ container: { props: { height: '100%', width: '100%', position: 'relative' } } }}
         >
-          <Box ref={containerRef} w="full" maxW={columnWidth(layout.width)} mx="auto" h="full" />
+          {/* The bands beside a narrow column are outside the book: a tap there turns the page too. */}
+          <Box w="full" h="full" onClick={(e) => {
+            const side = tapSide(e.clientX, innerWidth)
+            if (reader && side && e.target === e.currentTarget) turnTowards(reader, side)
+          }}>
+            <Box ref={containerRef} w="full" maxW={columnWidth(layout.width)} mx="auto" h="full" />
+          </Box>
           {/* Opaque while the book opens: the page frames are laid out, then painted, in several steps. */}
           <Box position="absolute" inset="0" display="grid" placeItems="center" pointerEvents="none"
             bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
