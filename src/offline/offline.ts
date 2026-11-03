@@ -1,4 +1,4 @@
-import { downloadBook } from '../dropbox/api'
+import { downloadBook, fetchBook } from '../dropbox/api'
 import type { Book } from '../library/library'
 
 const CACHE = 'bookflix-books'
@@ -29,10 +29,20 @@ export async function getBookBlob(book: Book): Promise<Blob> {
   return blob
 }
 
-export async function saveOffline(book: Book): Promise<void> {
-  const blob = await downloadBook(book.id)
+// Streamed into the cache: a big comic never sits whole in memory, where Safari on iPhone gives up on a
+// blob of several hundred MB. onProgress gets the share downloaded, from 0 to 1.
+export async function saveOffline(book: Book, onProgress: (share: number) => void = () => {}): Promise<void> {
+  const res = await fetchBook(book.id)
+  let loaded = 0
+  const body = res.body!.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, out) {
+      loaded += chunk.length
+      onProgress(Math.min(1, loaded / book.file.size))
+      out.enqueue(chunk)
+    },
+  }))
   await removeOffline(book)
-  await (await caches.open(CACHE)).put(key(book), new Response(blob))
+  await (await caches.open(CACHE)).put(key(book), new Response(body))
 }
 
 export async function removeOffline(book: Book): Promise<void> {

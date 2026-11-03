@@ -49,6 +49,9 @@ export default function App() {
   const [pinOpen, setPinOpen] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [requests, setRequests] = useState<BookRequest[] | null>(null)
+  // Books being downloaded, with the share done: kept here so leaving the series sheet does not lose it.
+  const [downloads, setDownloads] = useState<Record<string, number>>({})
+  const inFlight = useRef(new Set<string>()) // the same, read synchronously: a second tap must not start it twice
 
   const onError = useCallback((e: unknown) => {
     console.error(e)
@@ -115,11 +118,23 @@ export default function App() {
   }
 
   const toggleOffline = async (book: Book) => {
+    if (inFlight.current.has(book.id)) return
+    inFlight.current.add(book.id)
     try {
-      await (offline.has(book.id) ? removeOffline(book) : saveOffline(book))
+      if (offline.has(book.id)) await removeOffline(book)
+      else {
+        setDownloads((d) => ({ ...d, [book.id]: 0 }))
+        // One update per percent: progress events come for every network chunk.
+        await saveOffline(book, (share) =>
+          setDownloads((d) => (Math.floor(share * 100) === Math.floor((d[book.id] ?? 0) * 100) ? d : { ...d, [book.id]: share })))
+        setNotice(`« ${book.title} » est sur l'appareil.`)
+      }
       setOffline(await listOffline())
     } catch (e) {
-      onError(e)
+      onError((e as Error)?.name === 'QuotaExceededError' ? new Error(`Plus assez de place sur l'appareil pour « ${book.title} ».`) : e)
+    } finally {
+      inFlight.current.delete(book.id)
+      setDownloads(({ [book.id]: _, ...others }) => others)
     }
   }
 
@@ -239,7 +254,7 @@ export default function App() {
           {base.name === 'kind' && <KindScreen series={series} kind={base.kind} />}
           {base.name === 'search' && <SearchScreen series={series} query={query} />}
           {openSeries && (
-            <SeriesModal series={openSeries} progress={progress} offline={offline} onToggleOffline={toggleOffline}
+            <SeriesModal series={openSeries} progress={progress} offline={offline} downloads={downloads} onToggleOffline={toggleOffline}
               onReset={resetBook} onClose={() => goBack(baseHash(base))} />
           )}
           {avatarOpen && profile && (

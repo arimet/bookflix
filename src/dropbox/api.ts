@@ -91,6 +91,8 @@ async function download(app: DropboxApp, pathOrId: string): Promise<Blob> {
 
 // Books: read-only app, whole Dropbox. Everything else: sync app, its own folder.
 export const downloadBook = (id: string) => download('library', id)
+// The response itself, for a caller that streams the body instead of holding it whole.
+export const fetchBook = (id: string) => call('library', `${CONTENT}/files/download`, { headers: { 'Dropbox-API-Arg': dropboxArg({ path: id }) } })
 export const downloadSync = (path: string) => download('sync', path)
 
 export async function downloadBookRange(id: string, start: number, length: number): Promise<Uint8Array> {

@@ -1,5 +1,5 @@
 import { Badge, Box, Button, chakra, CloseButton, Dialog, Flex, Heading, Image, Stack, Text } from '@chakra-ui/react'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { isRead, resumeBook, type Series } from '../library/catalog'
 import type { Book } from '../library/library'
 import { cachedBookSettings, defaultDirection } from '../sync/books'
@@ -15,13 +15,14 @@ type Props = {
   series: Series
   progress: ProgressMap
   offline: Set<string>
+  downloads: Record<string, number> // book id → share downloaded, while downloading
   onToggleOffline: (book: Book) => Promise<void>
   onReset: (book: Book) => void
   onClose: () => void
 }
 
-function Episode({ book, index, progress, offline, onToggleOffline, onReset }: { book: Book; index: number } & Omit<Props, 'series' | 'onClose'>) {
-  const [busy, setBusy] = useState(false)
+function Episode({ book, index, progress, offline, downloads, onToggleOffline, onReset }: { book: Book; index: number } & Omit<Props, 'series' | 'onClose'>) {
+  const downloading = downloads[book.id]
   const percent = progress[book.id]?.percent ?? 0
   const state = isRead(book, progress) ? 'Lu' : percent > 0 ? `${Math.round(percent * 100)} %` : 'Pas commencé'
   return (
@@ -37,16 +38,17 @@ function Episode({ book, index, progress, offline, onToggleOffline, onReset }: {
           </Stack>
         </chakra.a>
       </BookMenu>
-      <Button size="sm" variant="ghost" color={offline.has(book.id) ? '#46d369' : 'muted'} loading={busy}
+      <Button size="sm" variant="ghost" color={offline.has(book.id) ? '#46d369' : 'muted'} disabled={downloading !== undefined}
+        minW="12" fontVariantNumeric="tabular-nums"
         aria-label={offline.has(book.id) ? `Retirer ${book.title} de l'appareil` : `Télécharger ${book.title}`}
-        onClick={() => { setBusy(true); onToggleOffline(book).finally(() => setBusy(false)) }}>
-        {offline.has(book.id) ? '✓' : '⤓'}
+        onClick={() => onToggleOffline(book)}>
+        {downloading !== undefined ? `${Math.floor(downloading * 100)} %` : offline.has(book.id) ? '✓' : '⤓'}
       </Button>
     </Flex>
   )
 }
 
-export function SeriesModal({ series, progress, offline, onToggleOffline, onReset, onClose }: Props) {
+export function SeriesModal({ series, progress, offline, downloads, onToggleOffline, onReset, onClose }: Props) {
   const header = useRef<HTMLDivElement>(null)
   const next = resumeBook(series, progress)
   const cover = useCoverUrl(series.books[0], header)
@@ -55,13 +57,12 @@ export function SeriesModal({ series, progress, offline, onToggleOffline, onRese
   const started = (progress[next.id]?.percent ?? 0) > 0
   const first = series.books[0]
   const direction = cachedBookSettings()[first.id]?.direction ?? defaultDirection(first.format)
-  const [downloadingAll, setDownloadingAll] = useState(false)
   const missing = series.books.filter((b) => !offline.has(b.id))
+  const downloadingAll = series.books.some((b) => b.id in downloads)
 
+  // One at a time, books can be large. Goes on if the sheet is closed.
   const downloadAll = async () => {
-    setDownloadingAll(true)
-    for (const book of missing) await onToggleOffline(book) // one at a time: books can be large
-    setDownloadingAll(false)
+    for (const book of missing) await onToggleOffline(book)
   }
 
   return (
@@ -103,7 +104,7 @@ export function SeriesModal({ series, progress, offline, onToggleOffline, onRese
               )}
             </Flex>
             {series.books.map((book, i) => (
-              <Episode key={book.id} book={book} index={i} progress={progress} offline={offline} onToggleOffline={onToggleOffline} onReset={onReset} />
+              <Episode key={book.id} book={book} index={i} progress={progress} offline={offline} downloads={downloads} onToggleOffline={onToggleOffline} onReset={onReset} />
             ))}
           </Dialog.Body>
         </Dialog.Content>
