@@ -3,10 +3,10 @@ import type { Book } from '../library/library'
 import { getBookBlob, localBookBlob } from '../offline/offline'
 import { openArchive, openBook } from './openBook'
 import { openReader } from './openReader'
-import { createRemoteArchive } from './remoteZip'
+import { createLocalArchive, createRemoteArchive } from './remoteZip'
 
 vi.mock('../offline/offline', () => ({ localBookBlob: vi.fn(), getBookBlob: vi.fn() }))
-vi.mock('./remoteZip', () => ({ createRemoteArchive: vi.fn(async () => ({ remote: true })) }))
+vi.mock('./remoteZip', () => ({ createRemoteArchive: vi.fn(async () => ({ remote: true })), createLocalArchive: vi.fn(async () => ({ local: true })) }))
 vi.mock('./openBook', () => {
   const opened = { manifest: {}, getResource: vi.fn(), archive: {}, close: vi.fn() }
   return { openBook: vi.fn(async () => opened), openArchive: vi.fn(async () => opened) }
@@ -28,11 +28,13 @@ test('a CBZ not on the device opens straight from Dropbox, page by page', async 
   expect(getBookBlob).not.toHaveBeenCalled()
 })
 
-test('a CBZ already on the device opens from the local copy', async () => {
+test('a CBZ already on the device opens from the local copy, page by page', async () => {
   const blob = new Blob(['x'])
   vi.mocked(localBookBlob).mockResolvedValue(blob)
   await openReader(book('cbz'), 'rtl', undefined)
-  expect(openBook).toHaveBeenCalledWith(blob, 'b.cbz', 'cbz', 'rtl')
+  expect(createLocalArchive).toHaveBeenCalledWith(expect.objectContaining({ id: 'id:b' }), blob)
+  expect(openArchive).toHaveBeenCalledWith({ local: true }, 'rtl')
+  expect(openBook).not.toHaveBeenCalled()
   expect(createRemoteArchive).not.toHaveBeenCalled()
 })
 

@@ -5,7 +5,7 @@ import type { Direction } from '../sync/books'
 import { createAppReader, createPdfReader, type AppReader } from './createAppReader'
 import { getBookBlob, localBookBlob } from '../offline/offline'
 import { openArchive, openBook } from './openBook'
-import { createRemoteArchive } from './remoteZip'
+import { createLocalArchive, createRemoteArchive } from './remoteZip'
 import { openEpub } from './openEpub'
 
 type Target = { type: 'cfi'; value: string } | undefined
@@ -19,10 +19,10 @@ const PRELOAD = { numberOfAdjacentSpineItemToPreLoad: 1 }
 // Comics and PDFs are served from the page: libarchive and pdf.js cannot run in a service worker.
 export async function openReader(book: Book, direction: Direction, target: Target): Promise<{ reader: AppReader; close: () => void }> {
   const local = await localBookBlob(book)
-  // A CBZ not on the device is read from Dropbox page by page instead of waiting for the whole file.
-  if (book.format === 'cbz' && !local) {
+  // A CBZ is read page by page, from Dropbox or from the copy on the device, never unzipped whole.
+  if (book.format === 'cbz') {
     try {
-      const opened = await openArchive(await createRemoteArchive(book), direction)
+      const opened = await openArchive(await (local ? createLocalArchive(book, local) : createRemoteArchive(book)), direction)
       return { reader: createAppReader({ ...PRELOAD, manifest: opened.manifest, getResource: opened.getResource, target }), close: opened.close }
     } catch (e) {
       console.warn('Range reading failed, downloading the whole book', e) // falls through to the download below

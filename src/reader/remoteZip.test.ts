@@ -1,7 +1,9 @@
 import { Uint8ArrayWriter, type FileEntry } from '@zip.js/zip.js'
 import JSZip from 'jszip'
 import { expect, test } from 'vitest'
-import { blockReader, openRemoteZip } from './remoteZip'
+import type { FileRecord } from '@prose-reader/archive-reader'
+import type { Book } from '../library/library'
+import { blockReader, createLocalArchive, openRemoteZip } from './remoteZip'
 
 test('a remote zip is read by ranges, not downloaded whole', async () => {
   const zip = new JSZip()
@@ -51,4 +53,24 @@ test('blockReader shares one request between concurrent reads of the same block'
   })
   await Promise.all([read(0, 10), read(500, 10), read(990, 10)])
   expect(calls).toBe(1)
+})
+
+test('a CBZ on the device is read by slices of its file, not loaded whole', async () => {
+  const zip = new JSZip()
+  zip.file('001.jpg', new Uint8Array(2_000_000).fill(7), { compression: 'STORE' })
+  zip.file('002.jpg', new Uint8Array([1, 2, 3]), { compression: 'STORE' })
+  const blob = await zip.generateAsync({ type: 'blob' })
+  let sliced = 0
+  const slice = blob.slice.bind(blob)
+  blob.slice = (start?: number, end?: number) => {
+    sliced += (end ?? blob.size) - (start ?? 0)
+    return slice(start, end)
+  }
+  const book = { file: { name: 'b.cbz' }, format: 'cbz' } as Book
+
+  const archive = await createLocalArchive(book, blob)
+  const small = archive.records.find((r) => r.basename === '002.jpg') as FileRecord
+
+  expect([...new Uint8Array(await small.arrayBuffer())]).toEqual([1, 2, 3])
+  expect(sliced).toBeLessThan(blob.size / 10)
 })
