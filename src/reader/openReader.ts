@@ -10,6 +10,10 @@ import { openEpub } from './openEpub'
 
 type Target = { type: 'cfi'; value: string } | undefined
 
+// A comic page is a big image (a 2100 px manga page takes about 12 MB once decoded). prose-reader keeps
+// 3 pages loaded on each side by default: 7 such pages make Safari on iPhone kill the tab. One on each side.
+const COMIC = { numberOfAdjacentSpineItemToPreLoad: 1 }
+
 // EPUB documents load their CSS, fonts and images by URL, so they go through the service worker.
 // Comics and PDFs are served from the page: libarchive and pdf.js cannot run in a service worker.
 export async function openReader(book: Book, direction: Direction, target: Target): Promise<{ reader: AppReader; close: () => void }> {
@@ -18,7 +22,7 @@ export async function openReader(book: Book, direction: Direction, target: Targe
   if (book.format === 'cbz' && !local) {
     try {
       const opened = await openArchive(await createRemoteArchive(book), direction)
-      return { reader: createAppReader({ manifest: opened.manifest, getResource: opened.getResource, target }), close: opened.close }
+      return { reader: createAppReader({ ...COMIC, manifest: opened.manifest, getResource: opened.getResource, target }), close: opened.close }
     } catch (e) {
       console.warn('Range reading failed, downloading the whole book', e) // falls through to the download below
     }
@@ -31,7 +35,7 @@ export async function openReader(book: Book, direction: Direction, target: Targe
   const opened = await openBook(blob, book.file.name, book.format, direction)
   const reader: AppReader =
     book.format === 'pdf'
-      ? createPdfReader({ manifest: opened.manifest, target, pdf: { pdfjsViewerInlineCss, getArchiveForItem: () => of(opened.archive) } })
-      : createAppReader({ manifest: opened.manifest, getResource: opened.getResource, target })
+      ? createPdfReader({ ...COMIC, manifest: opened.manifest, target, pdf: { pdfjsViewerInlineCss, getArchiveForItem: () => of(opened.archive) } })
+      : createAppReader({ ...COMIC, manifest: opened.manifest, getResource: opened.getResource, target })
   return { reader, close: opened.close }
 }

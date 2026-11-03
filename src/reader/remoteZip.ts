@@ -23,7 +23,7 @@ class RangeReader extends Reader<null> {
 export const openRemoteZip = (size: number, read: ReadRange) => new ZipReader(new RangeReader(size, read))
 
 const BLOCK = 1024 * 1024
-const MAX_BLOCKS = 48 // ~48 MB kept per open book
+const MAX_BLOCKS = 16 // ~16 MB kept per open book: memory is tight on iPhone
 
 // Each Dropbox request costs a round trip, often more than the transfer itself. zip.js asks for a
 // 30-byte entry header, then the entry data, then the next header… Reading whole 1 MB blocks and
