@@ -1,4 +1,5 @@
 import { Box, Button, Dialog, Flex, Stack, Text } from '@chakra-ui/react'
+import { DebugLog, DEBUG } from '../components/DebugLog'
 import { Loader } from '../components/Loader'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
 import '@prose-reader/react-reader/index.css'
@@ -173,6 +174,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
           )}
         </ReactReader>
       </Box>
+      {DEBUG && <DebugLog reader={reader} />}
       <Dialog.Root open={menuOpen} onOpenChange={(e) => setMenuOpen(e.open)} placement="center">
         <Dialog.Backdrop />
         <Dialog.Positioner>

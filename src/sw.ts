@@ -16,6 +16,11 @@ const forceDirection: StreamerManifestHookFactory =
   ({ archive }) =>
   (manifest) => ({ ...manifest, readingDirection: (archive as BookArchive).direction ?? manifest.readingDirection })
 
+// Debug messages for the reader's "?debug" log: iOS stops idle service workers, and each restart reopens the book.
+const startedAt = Date.now()
+const debug = (msg: string) =>
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => clients.forEach((c) => c.postMessage({ debug: msg })))
+
 // EPUBs are served from here: their documents load their own CSS, fonts and images by URL.
 const streamer = new ServiceWorkerStreamer({
   cleanArchiveAfter: 5 * 60 * 1000,
@@ -25,6 +30,7 @@ const streamer = new ServiceWorkerStreamer({
     return url.pathname.startsWith(STREAMER_PATH) ? { baseUrl: url.origin + STREAMER_PATH.slice(0, -1) } : undefined
   },
   getArchive: async (key) => {
+    const opening = Date.now()
     const parked = await (await caches.open(OPEN_CACHE)).match(openCacheUrl(key))
     if (!parked) throw new Error(`No open book for ${key}`)
     const zip = await JSZip.loadAsync(await parked.blob())
@@ -33,6 +39,7 @@ const streamer = new ServiceWorkerStreamer({
       encodingFormat: 'application/epub+zip',
     })
     archive.direction = parseOpenKey(key).direction
+    debug(`book opened in ${Date.now() - opening} ms, worker up for ${Math.round((opening - startedAt) / 1000)} s`)
     return archive
   },
 })
