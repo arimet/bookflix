@@ -4,7 +4,7 @@ import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
 import { refitEnhancer } from '@prose-reader/enhancer-refit'
-import { concat, concatMap, defer, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
+import { concat, concatMap, defer, filter, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
 
 type Offset = { horizontalOffset: number; verticalOffset: number }
 type LaidOut = { endOffset: Offset }
@@ -97,4 +97,40 @@ export function turnOnSideTaps(reader: AppReader) {
       }),
     ),
   )
+}
+
+// How far, as a share of the screen width, a finger must keep pulling past the page's edge to turn it.
+const EDGE_PULL = 0.25
+
+// The side to turn to when a pan while zoomed kept pulling past the edge of the page, or null. x is the
+// zoom's horizontal offset: 0 with the page's left edge on screen, minX with its right edge.
+export function edgePullSide(pan: { startX: number; endX: number; deltaX: number }, minX: number, width: number) {
+  const pull = pan.deltaX - (pan.endX - pan.startX) // what the finger moved beyond what the page did
+  if (pull > width * EDGE_PULL && pan.endX >= -1) return 'left'
+  if (pull < -width * EDGE_PULL && pan.endX <= minX + 1) return 'right'
+  return null
+}
+
+// Zoomed in, a pan moves around the page and stops at its edges: pulling on well past an edge turns the page,
+// keeping the zoom. Runs after prose-reader has moved the zoom for the pan.
+export function turnOnEdgePulls(reader: AppReader) {
+  let start: { x: number; scale: number } | undefined
+  return reader.gestures.gestures$
+    .pipe(filter((gesture) => gesture.type === 'pan'))
+    .subscribe(({ gestureEvent: event }) => {
+      const zoom = reader.zoom.state
+      if (event.type === 'panStart') {
+        start = isZoomedIn(zoom) ? { x: zoom.currentPosition.x, scale: zoom.currentScale } : undefined
+        return
+      }
+      if (event.type !== 'panEnd' || !start) return
+      const from = start
+      start = undefined
+      // A pinch changes the scale: that pan was a zoom, not a pull.
+      if (!isZoomedIn(zoom) || zoom.currentScale !== from.scale) return
+      if (reader.settings.values.computedPageTurnDirection !== 'horizontal') return
+      const width = reader.viewport.value.element.clientWidth
+      const side = edgePullSide({ startX: from.x, endX: zoom.currentPosition.x, deltaX: event.deltaX }, width * (1 - zoom.currentScale), width)
+      if (side) turnTowards(reader, side)
+    })
 }

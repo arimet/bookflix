@@ -8,7 +8,7 @@ import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
-import { markSpineItemOnScreen, tapSide, turnOnSideTaps, turnTowards, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
+import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnSideTaps, turnTowards, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { openReader } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookDirection, type Direction } from '../sync/books'
 import { positionRecorder } from '../sync/positionRecorder'
@@ -70,7 +70,9 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
     const marks = markSpineItemOnScreen(reader)
     const ready = whenPageOnScreenReady(reader, () => setDrawn(reader))
     const unregisterTaps = turnOnSideTaps(reader)
+    const pulls = turnOnEdgePulls(reader)
     return () => {
+      pulls.unsubscribe()
       marks.unsubscribe()
       ready.unsubscribe()
       unregisterTaps()
