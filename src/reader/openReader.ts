@@ -31,7 +31,9 @@ export async function openReader(book: Book, direction: Direction, target: Targe
   const blob = local ?? (await getBookBlob(book))
   if (book.format === 'epub') {
     const { manifest, close } = await openEpub(book.id, blob, book.file.name, direction)
-    return { reader: createAppReader({ ...PRELOAD, manifest, target }), close }
+    // A chapter is laid out as one strip, a screen width per page: tens of thousands of pixels for a novel.
+    // Sliding that strip on a page turn made Safari on iPhone kill the page; the page changes at once.
+    return { reader: createAppReader({ ...PRELOAD, pageTurnAnimation: 'none', manifest, target }), close }
   }
   const opened = await openBook(blob, book.file.name, book.format, direction)
   const reader: AppReader =

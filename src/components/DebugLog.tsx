@@ -39,7 +39,16 @@ export function DebugLog({ reader }: { reader?: AppReader }) {
     // The width shows how big each chapter frame is laid out (one screen width per page).
     const sub = reader.spineItemsObserver.itemLoadStatusChange$.subscribe(({ item }) =>
       add(`item ${item.index} ${item.value.loadStatus}${item.value.loadStatus === 'loaded' ? ` ${item.containerElement?.offsetWidth}px` : ''}`))
-    return () => sub.unsubscribe()
+    // A turn that starts and never ends is where Safari killed the page.
+    const turns = reader.navigation.navigationState$.subscribe((state) => {
+      const at = reader.navigation.getNavigation().spineItem
+      const item = reader.spineItemsManager.items.find((i) => i.index === at || i.item.id === at)
+      add(`turn ${state === 'busy' ? 'start' : 'end'} item ${item?.index} ${item?.containerElement?.offsetWidth}px`)
+    })
+    return () => {
+      sub.unsubscribe()
+      turns.unsubscribe()
+    }
   }, [reader])
 
   return (
