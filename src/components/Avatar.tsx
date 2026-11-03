@@ -20,7 +20,7 @@ export function Avatar({ profile, size, ...box }: { profile: Pick<Profile, 'name
 
 export function AvatarPicker({ value, onChange }: { value: string | undefined; onChange: (a: AvatarDef) => void }) {
   return (
-    <SimpleGrid columns={{ base: 4, sm: 8 }} gap="2" role="radiogroup" aria-label="Avatar">
+    <SimpleGrid columns={{ base: 4, sm: 8 }} gap="2" justifyItems="center" role="radiogroup" aria-label="Avatar">
       {AVATARS.map((a) => (
         <chakra.button key={a.id} type="button" role="radio" aria-checked={value === a.id} aria-label={a.label} onClick={() => onChange(a)}
           rounded="md" outline={value === a.id ? '3px solid white' : '3px solid transparent'} outlineOffset="1px">

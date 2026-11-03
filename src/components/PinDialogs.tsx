@@ -1,4 +1,4 @@
-import { Button, Dialog, Input, Portal, Stack, Text } from '@chakra-ui/react'
+import { Button, CloseButton, Dialog, Input, Portal, Stack, Text } from '@chakra-ui/react'
 import { useState } from 'react'
 import { checkPin, setProfilePin, type Profile } from '../sync/profiles'
 
@@ -12,14 +12,21 @@ function PinInput({ value, onChange, label, autoFocus }: { value: string; onChan
   )
 }
 
-export function Shell({ title, onClose, children, size = 'xs' }: { title: string; onClose: () => void; children: React.ReactNode; size?: 'xs' | 'md' }) {
+// The frame of every small dialog. On a phone, one that opens the keyboard sits at the top: centred, the
+// keyboard would cover its button. Padded so that it never touches the notch or the screen edges.
+type ShellProps = { title: string; onClose: () => void; children: React.ReactNode; size?: 'xs' | 'md'; open?: boolean; keyboard?: boolean }
+
+export function Shell({ title, onClose, children, size = 'xs', open = true, keyboard }: ShellProps) {
   return (
-    <Dialog.Root open onOpenChange={(e) => !e.open && onClose()} placement="center" size={size}>
+    <Dialog.Root open={open} onOpenChange={(e) => !e.open && onClose()} placement={keyboard ? { base: 'top', md: 'center' } : 'center'} size={size}>
       <Portal>
         <Dialog.Backdrop bg="rgba(0,0,0,.8)" />
-        <Dialog.Positioner>
-          <Dialog.Content bg="panel" color="white" mx="4">
-            <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
+        <Dialog.Positioner px="4" pt="max(1rem, env(safe-area-inset-top))" pb="max(1rem, env(safe-area-inset-bottom))">
+          <Dialog.Content bg="panel" color="white" my="auto" mt={keyboard ? { base: '0', md: 'auto' } : 'auto'}>
+            <Dialog.Header pe="12"><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
+            <Dialog.CloseTrigger asChild top="3" right="3">
+              <CloseButton size="sm" color="muted" aria-label="Fermer" />
+            </Dialog.CloseTrigger>
             <Dialog.Body pb="6">{children}</Dialog.Body>
           </Dialog.Content>
         </Dialog.Positioner>
@@ -34,7 +41,7 @@ export function PinPrompt({ profile, onOk, onClose }: { profile: Profile; onOk: 
   const [wrong, setWrong] = useState(false)
   const submit = async () => ((await checkPin(profile, pin)) ? onOk() : (setWrong(true), setPin('')))
   return (
-    <Shell title={`Code de ${profile.name}`} onClose={onClose}>
+    <Shell title={`Code de ${profile.name}`} onClose={onClose} keyboard>
       <Stack as="form" gap="4" onSubmit={(e) => { e.preventDefault(); submit() }}>
         <PinInput value={pin} onChange={(v) => { setPin(v); setWrong(false) }} label="Code PIN" autoFocus />
         {wrong && <Text color="brand" fontSize="sm">Code incorrect.</Text>}
@@ -59,7 +66,7 @@ export function PinSettings({ profile, onDone, onClose, onError }: { profile: Pr
     }
   }
   return (
-    <Shell title="Code PIN du profil" onClose={onClose}>
+    <Shell title="Code PIN du profil" onClose={onClose} keyboard>
       <Stack as="form" gap="4" onSubmit={(e) => { e.preventDefault(); save(next) }}>
         <Text fontSize="sm" color="muted">Demandé quand on choisit ce profil. Il sépare les lecteurs, ce n'est pas un mot de passe Dropbox.</Text>
         {profile.pinHash && (

@@ -7,7 +7,7 @@ export const system = createSystem(
   defaultConfig,
   defineConfig({
     globalCss: {
-      'html, body': { bg: '#141414', color: 'white', colorScheme: 'dark' },
+      'html, body': { bg: '#141414', color: 'white', colorScheme: 'dark', accentColor: RED },
       '*:focus-visible': { outline: `2px solid ${RED}`, outlineOffset: '2px' },
       // prose-reader's "Refit" only applies to two-page comic spreads; disabled, it is just a grey icon.
       'button[aria-label="Refit"]:disabled': { display: 'none' },

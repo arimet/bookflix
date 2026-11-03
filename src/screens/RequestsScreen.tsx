@@ -1,4 +1,4 @@
-import { Badge, Box, Button, chakra, type BoxProps, Dialog, Flex, Heading, Image, Input, SimpleGrid, Stack, Text, Textarea } from '@chakra-ui/react'
+import { Badge, Box, Button, chakra, CloseButton, type BoxProps, Dialog, Flex, Heading, Image, Input, SimpleGrid, Stack, Text, Textarea } from '@chakra-ui/react'
 import { Loader } from '../components/Loader'
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
@@ -33,7 +33,7 @@ function Cover({ book, w }: { book: BookInfo; w: BoxProps['w'] }) {
   return (
     <Box w={w} aspectRatio={2 / 3} rounded="sm" overflow="hidden" flexShrink={0} bg={placeholderBg(book.title)}>
       {book.cover && !failed ? <Image src={book.cover} alt="" w="full" h="full" objectFit="cover" loading="lazy" onError={() => setFailed(true)} />
-        : <Text p="2" fontSize="xs" fontWeight="bold" lineClamp={4}>{book.title}</Text>}
+        : <Box p="2"><Text fontSize="xs" fontWeight="bold" lineClamp={4}>{book.title}</Text></Box>}
     </Box>
   )
 }
@@ -52,7 +52,7 @@ function Summary({ text }: { text: string }) {
 }
 
 // The book sheet: details and summary, and the "ask for it" button.
-function BookSheet({ book, existing, onRequest, onClose }: { book: BookInfo; existing?: BookRequest; onRequest: Props['onRequest']; onClose: () => void }) {
+export function BookSheet({ book, existing, onRequest, onClose }: { book: BookInfo; existing?: BookRequest; onRequest: Props['onRequest']; onClose: () => void }) {
   const [description, setDescription] = useState<string | null | undefined>(undefined)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -62,9 +62,9 @@ function BookSheet({ book, existing, onRequest, onClose }: { book: BookInfo; exi
   return (
     <Dialog.Root open onOpenChange={(e) => !e.open && onClose()} size="md" placement="center" scrollBehavior="inside">
       <Dialog.Backdrop bg="rgba(0,0,0,.7)" />
-      <Dialog.Positioner>
-        <Dialog.Content bg="panel" color="white" mx="4" maxH="85dvh">
-          <Dialog.CloseTrigger asChild top="3" right="3"><Button size="sm" variant="ghost" aria-label="Fermer">✕</Button></Dialog.CloseTrigger>
+      <Dialog.Positioner px="4" pt="max(1rem, env(safe-area-inset-top))" pb="max(1rem, env(safe-area-inset-bottom))">
+        <Dialog.Content bg="panel" color="white" my="auto" maxH="full">
+          <Dialog.CloseTrigger asChild top="3" right="3"><CloseButton size="sm" color="muted" aria-label="Fermer" /></Dialog.CloseTrigger>
           <Dialog.Body p="6">
             <Flex gap="4" pr="8">
               <Cover book={book} w={{ base: '5.5rem', sm: '7rem' }} />

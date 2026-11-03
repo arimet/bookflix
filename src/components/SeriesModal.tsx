@@ -71,7 +71,7 @@ export function SeriesModal({ series, progress, offline, downloads, onToggleOffl
       <Dialog.Positioner>
         <Dialog.Content bg="panel" color="white" overflow="hidden" rounded={{ base: 'none', md: 'lg' }} my={{ md: 8 }}
           pt={{ base: 'env(safe-area-inset-top)', md: 0 }}>
-          <Box ref={header} position="relative" overflow="hidden" h={{ base: "56", md: "72" }}>
+          <Box ref={header} position="relative" overflow="hidden" h={{ base: "56", md: "72" }} maxH="50dvh">
             {backdrop && <Box position="absolute" inset="0" bgImage={`linear-gradient(rgba(0,0,0,.4), rgba(0,0,0,.4)), url(${backdrop})`} bgSize="cover" bgPos="center" />}
             <Box position="absolute" inset="0" bg="linear-gradient(0deg, #181818 5%, transparent 70%)" />
             {cover && <Image src={cover} alt="" position="absolute" right="6" top="6" h="70%" rounded="sm" shadow="0 10px 30px #000" />}

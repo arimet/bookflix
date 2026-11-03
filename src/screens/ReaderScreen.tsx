@@ -1,6 +1,7 @@
-import { Box, Button, Dialog, Flex, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react'
 import { DebugLog, DEBUG } from '../components/DebugLog'
 import { Loader } from '../components/Loader'
+import { Shell } from '../components/PinDialogs'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
 import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -187,57 +188,65 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
         </ReactReader>
       </Box>
       {DEBUG && <DebugLog reader={reader} />}
-      <Dialog.Root open={menuOpen} onOpenChange={(e) => setMenuOpen(e.open)} placement="center">
-        <Dialog.Backdrop />
-        <Dialog.Positioner>
-          <Dialog.Content mx="4">
-            <Dialog.Header><Dialog.Title>Réglages</Dialog.Title></Dialog.Header>
-            <Dialog.Body>
-              <Stack gap="2" mb="6">
-                <Text fontWeight="semibold">Thème</Text>
-                <Flex gap="2">
-                  {THEMES.map((t) => (
-                    <Button key={t.theme} flex="1" bg={t.bg} color={t.theme === 'night' ? 'white' : 'black'}
-                      outline={layout.theme === t.theme ? '2px solid #e50914' : 'none'} onClick={() => changeLayout({ theme: t.theme })}>
-                      {t.label}
-                    </Button>
-                  ))}
-                </Flex>
-              </Stack>
-              <Stack gap="2" mb="6">
-                <Flex justify="space-between">
-                  <Text fontWeight="semibold">Largeur</Text>
-                  <Text color="fg.muted">{layout.width >= FULL_WIDTH ? 'Pleine' : `${layout.width} rem`}</Text>
-                </Flex>
-                <input type="range" min={28} max={FULL_WIDTH} step={2} value={layout.width} aria-label="Largeur"
-                  onChange={(e) => changeLayout({ width: Number(e.target.value) })} />
-              </Stack>
-              <Stack gap="2" mb="6">
-                <Flex justify="space-between" align="center">
-                  <Text fontWeight="semibold">Hauteur de ligne</Text>
-                  <Text color="fg.muted">{layout.lineHeight === 'publisher' ? 'Celle du livre' : layout.lineHeight.toFixed(1)}</Text>
-                </Flex>
-                <input type="range" min={1} max={2.4} step={0.1} aria-label="Hauteur de ligne"
-                  value={layout.lineHeight === 'publisher' ? 1.5 : layout.lineHeight}
-                  onChange={(e) => changeLayout({ lineHeight: Number(e.target.value) })} />
-                <Button size="xs" variant="ghost" alignSelf="end" disabled={layout.lineHeight === 'publisher'}
-                  onClick={() => changeLayout({ lineHeight: 'publisher' })}>
-                  Revenir à celle du livre
-                </Button>
-              </Stack>
-              <Stack gap="2">
-                <Text fontWeight="semibold">Sens de lecture</Text>
-                <Button variant={direction === 'ltr' ? 'solid' : 'outline'} onClick={() => changeDirection('ltr')}>
-                  Gauche → droite (livre)
-                </Button>
-                <Button variant={direction === 'rtl' ? 'solid' : 'outline'} onClick={() => changeDirection('rtl')}>
-                  Droite → gauche (manga)
-                </Button>
-              </Stack>
-            </Dialog.Body>
-          </Dialog.Content>
-        </Dialog.Positioner>
-      </Dialog.Root>
+      <ReaderSettings open={menuOpen} onClose={() => setMenuOpen(false)} layout={layout} onLayout={changeLayout}
+        direction={direction} onDirection={changeDirection} />
     </Box>
+  )
+}
+
+type SettingsProps = {
+  open: boolean
+  onClose: () => void
+  layout: Layout
+  onLayout: (changes: Partial<Layout>) => void
+  direction?: Direction
+  onDirection: (next: Direction) => void
+}
+
+export function ReaderSettings({ open, onClose, layout, onLayout, direction, onDirection }: SettingsProps) {
+  return (
+    <Shell title="Réglages" open={open} onClose={onClose} size="md">
+      <Stack gap="2" mb="6">
+        <Text fontWeight="semibold">Thème</Text>
+        <Flex gap="2">
+          {THEMES.map((t) => (
+            <Button key={t.theme} flex="1" bg={t.bg} color={t.theme === 'night' ? 'white' : 'black'}
+              outline={layout.theme === t.theme ? '2px solid #e50914' : 'none'} onClick={() => onLayout({ theme: t.theme })}>
+              {t.label}
+            </Button>
+          ))}
+        </Flex>
+      </Stack>
+      <Stack gap="2" mb="6">
+        <Flex justify="space-between">
+          <Text fontWeight="semibold">Largeur</Text>
+          <Text color="fg.muted">{layout.width >= FULL_WIDTH ? 'Pleine' : `${layout.width} rem`}</Text>
+        </Flex>
+        <input type="range" min={28} max={FULL_WIDTH} step={2} value={layout.width} aria-label="Largeur"
+          onChange={(e) => onLayout({ width: Number(e.target.value) })} />
+      </Stack>
+      <Stack gap="2" mb="6">
+        <Flex justify="space-between" align="center">
+          <Text fontWeight="semibold">Hauteur de ligne</Text>
+          <Text color="fg.muted">{layout.lineHeight === 'publisher' ? 'Celle du livre' : layout.lineHeight.toFixed(1)}</Text>
+        </Flex>
+        <input type="range" min={1} max={2.4} step={0.1} aria-label="Hauteur de ligne"
+          value={layout.lineHeight === 'publisher' ? 1.5 : layout.lineHeight}
+          onChange={(e) => onLayout({ lineHeight: Number(e.target.value) })} />
+        <Button size="xs" variant="ghost" alignSelf="end" disabled={layout.lineHeight === 'publisher'}
+          onClick={() => onLayout({ lineHeight: 'publisher' })}>
+          Revenir à celle du livre
+        </Button>
+      </Stack>
+      <Stack gap="2">
+        <Text fontWeight="semibold">Sens de lecture</Text>
+        <Button variant={direction === 'ltr' ? 'solid' : 'outline'} onClick={() => onDirection('ltr')}>
+          Gauche → droite (livre)
+        </Button>
+        <Button variant={direction === 'rtl' ? 'solid' : 'outline'} onClick={() => onDirection('rtl')}>
+          Droite → gauche (manga)
+        </Button>
+      </Stack>
+    </Shell>
   )
 }
