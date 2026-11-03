@@ -52,7 +52,7 @@ export function SeriesModal({ series, progress, offline, downloads, onToggleOffl
   const header = useRef<HTMLDivElement>(null)
   const next = resumeBook(series, progress)
   const cover = useCoverUrl(series.books[0], header)
-  const backdrop = useSoftBackdrop(cover)
+  const { soft: backdrop } = useSoftBackdrop(cover)
   const read = series.books.filter((b) => isRead(b, progress)).length
   const started = (progress[next.id]?.percent ?? 0) > 0
   const first = series.books[0]

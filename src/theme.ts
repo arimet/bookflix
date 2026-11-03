@@ -37,6 +37,7 @@ export const system = createSystem(
       // A cut title slides to its end and back (Marquee).
       keyframes: {
         shimmer: { from: { backgroundPosition: '100% 0' }, to: { backgroundPosition: '0 0' } },
+        rise: { from: { opacity: 0, transform: 'translateY(16px) scale(.98)' }, to: { opacity: 1, transform: 'none' } },
         marquee: { '0%, 15%': { transform: 'translateX(0)' }, '85%, 100%': { transform: 'translateX(var(--shift))' } },
       },
       tokens: { colors: { brand: { value: RED } } },
