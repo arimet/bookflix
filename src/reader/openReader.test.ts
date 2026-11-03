@@ -38,6 +38,13 @@ test('a CBZ already on the device opens from the local copy, page by page', asyn
   expect(createRemoteArchive).not.toHaveBeenCalled()
 })
 
+test('a CBZ on the device that cannot be read by ranges fails, never unzipped whole', async () => {
+  vi.mocked(localBookBlob).mockResolvedValue(new Blob(['x']))
+  vi.mocked(createLocalArchive).mockRejectedValueOnce(new Error('Corrupted zip'))
+  await expect(openReader(book('cbz'), 'rtl', undefined)).rejects.toThrow('Corrupted zip')
+  expect(openBook).not.toHaveBeenCalled()
+})
+
 test('a CBZ falls back to a full download when range reading fails', async () => {
   vi.mocked(localBookBlob).mockResolvedValue(null)
   vi.mocked(createRemoteArchive).mockRejectedValueOnce(new Error('Dropbox ignored the byte range'))

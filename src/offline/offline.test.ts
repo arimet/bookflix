@@ -59,6 +59,8 @@ test('saveOffline writes the book to a file that is listed, read and removed', a
   await saveOffline(book)
   expect(await listOffline()).toEqual(new Set(['id:a@b']))
   expect(new Uint8Array(await (await localBookBlob(book))!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+  // Not the size Dropbox gives: an incomplete copy, read from Dropbox instead.
+  expect(await localBookBlob({ ...book, file: { ...book.file, size: 4 } })).toBeNull()
 
   // A download cut short leaves an empty file: not a book on the device.
   files.set('id%3Aother%40x@r1', new FakeFileHandle('id%3Aother%40x@r1'))

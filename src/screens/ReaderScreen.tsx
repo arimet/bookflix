@@ -38,7 +38,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
   // The reader whose first page is drawn; our loader covers it until then.
   const [drawn, setDrawn] = useState<AppReader>()
   const [direction, setDirection] = useState<Direction>()
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<string>() // the error, shown to tell what went wrong
   const [menuOpen, setMenuOpen] = useState(false)
   // Bumped to reopen the book, e.g. after a direction change; the latest position is reread then.
   const [session, setSession] = useState(0)
@@ -133,7 +133,7 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
     })().catch((e) => {
       if (cancelled) return
       console.error(e)
-      setFailed(true)
+      setFailed(e instanceof Error ? e.message : String(e))
       // Auth problems must still send the user back to the login screen.
       if (e instanceof AuthError) onError(e)
     })
@@ -155,11 +155,12 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
     }
   }
 
-  if (failed) {
+  if (failed !== undefined) {
     return (
       <Box minH="100dvh" display="grid" placeItems="center" p="6">
         <Stack gap="4" align="center" textAlign="center">
           <Text>Impossible d'ouvrir ce livre.</Text>
+          <Text fontSize="sm" color="muted">{failed}</Text>
           <Button onClick={onBack}>Retour</Button>
         </Stack>
       </Box>

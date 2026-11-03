@@ -25,6 +25,8 @@ export async function openReader(book: Book, direction: Direction, target: Targe
       const opened = await openArchive(await (local ? createLocalArchive(book, local) : createRemoteArchive(book)), direction)
       return { reader: createAppReader({ ...PRELOAD, manifest: opened.manifest, getResource: opened.getResource, target }), close: opened.close }
     } catch (e) {
+      // Unzipping the same bytes whole would only fail later, after holding hundreds of MB in memory.
+      if (local) throw e
       console.warn('Range reading failed, downloading the whole book', e) // falls through to the download below
     }
   }

@@ -18,12 +18,12 @@ const canWriteFiles = () => typeof FileSystemFileHandle !== 'undefined' && 'crea
 const RECENT_CACHE = 'bookflix-recent'
 const RECENT_COUNT = 3
 
-// An empty file is a download the page did not live to finish: the bytes only land when the file is closed.
+// A file of another size than Dropbox's is a download the page did not live to finish.
 async function savedFile(book: Book): Promise<File | null> {
   if (!canWriteFiles()) return null
   try {
     const file = await (await (await booksDir()).getFileHandle(fileName(book))).getFile()
-    return file.size ? file : null
+    return file.size === book.file.size ? file : null
   } catch {
     return null
   }
