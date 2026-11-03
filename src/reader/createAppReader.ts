@@ -29,3 +29,11 @@ export function markSpineItemOnScreen(reader: AppReader) {
     marked = element
   })
 }
+
+// Calls onReady once the page on screen is drawn: until then the reader shows half-built frames.
+export function whenPageOnScreenReady(reader: AppReader, onReady: () => void) {
+  if (currentSpineItem(reader)?.value.isReady) onReady()
+  return reader.spineItemsObserver.itemStateChange$.subscribe(({ item, isReady }) => {
+    if (isReady && item === currentSpineItem(reader)) onReady()
+  })
+}

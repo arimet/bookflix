@@ -6,7 +6,7 @@ import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
-import { markSpineItemOnScreen, type AppReader } from '../reader/createAppReader'
+import { markSpineItemOnScreen, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { openReader } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookDirection, type Direction } from '../sync/books'
 import { positionRecorder } from '../sync/positionRecorder'
@@ -34,6 +34,8 @@ type Props = { book: Book; profileId: string; onBack: () => void; onError: (e: u
 export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [reader, setReader] = useState<AppReader>()
+  // The reader whose first page is drawn; our loader covers it until then.
+  const [drawn, setDrawn] = useState<AppReader>()
   const [direction, setDirection] = useState<Direction>()
   const [failed, setFailed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -60,8 +62,12 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
 
   useEffect(() => {
     if (!reader) return
-    const sub = markSpineItemOnScreen(reader)
-    return () => sub.unsubscribe()
+    const marks = markSpineItemOnScreen(reader)
+    const ready = whenPageOnScreenReady(reader, () => setDrawn(reader))
+    return () => {
+      marks.unsubscribe()
+      ready.unsubscribe()
+    }
   }, [reader])
 
   useEffect(() => {
@@ -173,11 +179,11 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
           slots={{ container: { props: { height: '100%', width: '100%', position: 'relative' } } }}
         >
           <Box ref={containerRef} w="full" maxW={columnWidth(layout.width)} mx="auto" h="full" />
-          {!reader && (
-            <Box position="absolute" inset="0" display="grid" placeItems="center">
-              <Loader />
-            </Box>
-          )}
+          {/* Opaque while the book opens: the page frames are laid out, then painted, in several steps. */}
+          <Box position="absolute" inset="0" display="grid" placeItems="center" pointerEvents="none"
+            bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
+            <Loader />
+          </Box>
         </ReactReader>
       </Box>
       {DEBUG && <DebugLog reader={reader} />}
