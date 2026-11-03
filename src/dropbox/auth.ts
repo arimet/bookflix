@@ -106,10 +106,12 @@ export const isLoggedIn = (app: DropboxApp) => load(app) !== null
 export const accountOf = (app: DropboxApp) => load(app)?.accountId ?? null
 
 // Dropbox comes back with ?error=…&state=<app> when the user refuses or something fails on its side.
-export function loginErrorFromUrl(params: URLSearchParams): { app: DropboxApp; message: string } | null {
+// app is null when Dropbox did not send state back: the message still matters, the app does not.
+export function loginErrorFromUrl(params: URLSearchParams): { app: DropboxApp | null; message: string } | null {
   const error = params.get('error')
-  const app = params.get('state')
-  if (!error || (app !== 'library' && app !== 'sync')) return null
+  if (!error) return null
+  const state = params.get('state')
+  const app = state === 'library' || state === 'sync' ? state : null
   return { app, message: error === 'access_denied' ? 'Connexion annulée.' : `Dropbox : ${params.get('error_description') ?? error}` }
 }
 

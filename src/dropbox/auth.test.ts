@@ -92,3 +92,7 @@ test('loginErrorFromUrl passes other Dropbox errors through', () => {
 test('loginErrorFromUrl ignores a normal return', () => {
   expect(loginErrorFromUrl(new URLSearchParams('code=abc&state=library'))).toBeNull()
 })
+
+test('loginErrorFromUrl still reads an error that names no app', () => {
+  expect(loginErrorFromUrl(new URLSearchParams('error=access_denied'))).toEqual({ app: null, message: 'Connexion annulée.' })
+})

@@ -74,6 +74,8 @@ export async function listLibrary(root: string, previous?: LibraryListing): Prom
   for (;;) {
     for (const e of page.entries as RawEntry[]) {
       if (e['.tag'] === 'deleted') {
+        // The books folder itself went away (deleted or renamed): same answer as listing it afresh.
+        if (e.path_lower === root.toLowerCase()) throw new DropboxError(409, 'path/not_found/')
         for (const key of files.keys()) if (key === e.path_lower || key.startsWith(e.path_lower + '/')) files.delete(key)
       } else if (e['.tag'] === 'file') {
         files.set(e.path_display.toLowerCase(), {

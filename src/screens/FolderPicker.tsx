@@ -4,6 +4,8 @@ import { LuChevronRight, LuFolder } from 'react-icons/lu'
 import { Loader } from '../components/Loader'
 import { Logo } from '../components/Logo'
 import { isTeamAccount, listFolders, type DbxFolder } from '../dropbox/api'
+import { AuthError } from '../dropbox/auth'
+import { isMissingFolder } from '../sync/libraryRoot'
 
 type Props = { initial: string; message?: string; onPick: (root: string) => void; onCancel?: () => void; onError: (e: unknown) => void }
 
@@ -12,6 +14,8 @@ export function FolderPicker({ initial, message, onPick, onCancel, onError }: Pr
   const [path, setPath] = useState(initial)
   const [folders, setFolders] = useState<DbxFolder[] | null>(null)
   const [team, setTeam] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     isTeamAccount().then(setTeam, () => {}) // only adds a line of explanation
@@ -20,15 +24,18 @@ export function FolderPicker({ initial, message, onPick, onCancel, onError }: Pr
   useEffect(() => {
     let alive = true
     setFolders(null)
+    setFailed(null)
     listFolders(path).then((f) => alive && setFolders(f), (e) => {
+      if (!alive) return
       // The folder to start from is gone: start from the top instead.
-      if (alive && path) setPath('')
-      else onError(e)
+      if (path && isMissingFolder(e)) return setPath('')
+      if (e instanceof AuthError) return onError(e)
+      setFailed(e instanceof TypeError ? 'Pas de connexion réseau.' : 'Dropbox ne répond pas pour le moment.')
     })
     return () => {
       alive = false
     }
-  }, [path, onError])
+  }, [path, attempt, onError])
 
   const segments = path.split('/').filter(Boolean)
   const crumbs = [{ name: 'Dropbox', path: '' }, ...segments.map((name, i) => ({ name, path: '/' + segments.slice(0, i + 1).join('/') }))]
@@ -56,7 +63,12 @@ export function FolderPicker({ initial, message, onPick, onCancel, onError }: Pr
             ))}
           </Flex>
           <Box maxH="50dvh" overflowY="auto">
-            {folders === null ? (
+            {failed ? (
+              <Stack py="6" px="4" gap="3" align="center">
+                <Text fontSize="sm" color="muted" role="alert">{failed}</Text>
+                <Button size="sm" variant="outline" onClick={() => setAttempt((n) => n + 1)}>Réessayer</Button>
+              </Stack>
+            ) : folders === null ? (
               <Box py="8" display="grid" placeItems="center"><Loader small /></Box>
             ) : folders.length === 0 ? (
               <Text px="4" py="6" fontSize="sm" color="muted" textAlign="center">Aucun sous-dossier ici.</Text>

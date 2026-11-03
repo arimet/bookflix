@@ -4,7 +4,7 @@ import { LIBRARY_ROOT, type DropboxApp } from './config'
 import { listLibrary, type LibraryListing } from './dropbox/api'
 import { AuthError, isLoggedIn, loginErrorFromUrl, logout } from './dropbox/auth'
 import { completeLogin, startConnection } from './dropbox/loginChain'
-import { FullLoader } from './components/Loader'
+import { FullLoader, RetryScreen } from './components/Loader'
 import { SeriesModal } from './components/SeriesModal'
 import { AvatarDialog } from './components/AvatarDialog'
 import { ConfirmDialog, type Confirm } from './components/ConfirmDialog'
@@ -64,6 +64,9 @@ export default function App() {
   const [libraryRoot, setLibraryRoot] = useState(cachedLibraryRoot)
   const [picking, setPicking] = useState<{ message?: string; cancellable: boolean } | null>(null)
   const [adminOnly, setAdminOnly] = useState(false)
+  // Finding the folder failed (Dropbox busy, unreadable settings): the start screen offers to try again.
+  const [rootError, setRootError] = useState<string | null>(null)
+  const [rootAttempt, setRootAttempt] = useState(0)
   const [requests, setRequests] = useState<BookRequest[] | null>(null)
   // Books being downloaded, with the share done: kept here so leaving the series sheet does not lose it.
   const [downloads, setDownloads] = useState<Record<string, number>>({})
@@ -119,6 +122,7 @@ export default function App() {
   useEffect(() => {
     if (!loggedIn) return
     const known = cachedLibraryRoot()
+    setRootError(null)
     resolveLibraryRoot().then((found) => {
       if (!('root' in found)) return setPicking({ cancellable: false })
       if (known !== null && found.root !== known) {
@@ -126,8 +130,12 @@ export default function App() {
         setLibrary(null)
       }
       setLibraryRoot(found.root)
-    }, onError)
-  }, [loggedIn, onError])
+    }, (e) => {
+      // With a folder known here the app goes on with it; without, nothing to show but the error.
+      if (known === null && !(e instanceof AuthError)) setRootError(e instanceof SyntaxError ? 'Les réglages Bookflix de ton Dropbox sont illisibles.' : 'Dropbox ne répond pas pour le moment.')
+      else onError(e)
+    })
+  }, [loggedIn, rootAttempt, onError])
 
   useEffect(() => {
     if (!ready) return
@@ -203,7 +211,8 @@ export default function App() {
       setNotice('Bibliothèque à jour.')
     } catch (e) {
       setNotice(null)
-      onError(e)
+      if (isMissingFolder(e)) setPicking({ message: `Le dossier ${folderName(libraryRoot)} n'existe plus dans ton Dropbox.`, cancellable: false })
+      else onError(e)
     }
   }
 
@@ -310,6 +319,8 @@ export default function App() {
       ) : picking ? (
         <FolderPicker initial={picking.cancellable ? libraryRoot ?? '' : ''} message={picking.message} onPick={pickFolder}
           onCancel={picking.cancellable ? () => setPicking(null) : undefined} onError={onError} />
+      ) : libraryRoot === null && rootError ? (
+        <RetryScreen message={rootError} onRetry={() => setRootAttempt((n) => n + 1)} />
       ) : libraryRoot === null ? (
         <FullLoader />
       ) : !profileId ? (

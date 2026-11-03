@@ -2,7 +2,7 @@ import { Box, Button, chakra, Input, Stack, Text } from '@chakra-ui/react'
 import { Logo } from '../components/Logo'
 import { useState } from 'react'
 import type { DropboxApp } from '../config'
-import { completeLogin, OFFLINE, startConnection } from '../dropbox/loginChain'
+import { completeLogin, OFFLINE, restartConnection, startConnection } from '../dropbox/loginChain'
 
 // An installed iOS web app may not get the OAuth redirect back, so it also offers the copy-paste code flow.
 const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
@@ -21,6 +21,16 @@ export function LoginScreen({ connected, error, onDone, onError }: Props) {
     setCodeError(null)
     startConnection('code').then(() => setCodeFor(connected.library ? 'sync' : 'library'), onError)
   }
+  // The redirect leaves the page; in code mode the screen goes back to step 1/2.
+  const restart = () => {
+    setCodeError(null)
+    if (!standalone) return restartConnection('redirect').catch(onError)
+    restartConnection('code').then(() => {
+      onDone()
+      setCodeFor('library')
+    }, onError)
+  }
+
   const submitCode = (app: DropboxApp) =>
     completeLogin(app, code, 'code').then(
       // After the first code the library is connected and this screen turns to step 2/2.
@@ -58,6 +68,12 @@ export function LoginScreen({ connected, error, onDone, onError }: Props) {
             <Button variant="ghost" onClick={startCode}>
               {halfway ? 'Autoriser la synchro (2/2)' : 'Se connecter avec un code'}
             </Button>
+          )}
+          {halfway && !codeFor && (
+            <chakra.button fontSize="xs" color="muted" textDecoration="underline" textUnderlineOffset="3px" _hover={{ color: 'white' }}
+              onClick={restart}>
+              Recommencer depuis le début
+            </chakra.button>
           )}
           {codeFor && (
             <Stack as="form" gap="3" onSubmit={(e) => { e.preventDefault(); submitCode(codeFor) }}>

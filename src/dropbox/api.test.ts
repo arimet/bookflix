@@ -150,3 +150,10 @@ test('isTeamAccount reads root_info', async () => {
   expect(auth(0)).toBe('Bearer token-library')
   expect(await isTeamAccount()).toBe(false)
 })
+
+test('listLibrary reports a books folder deleted since the last listing as missing', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ entries: [{ '.tag': 'deleted', name: 'Ebook', path_lower: '/ebook' }], has_more: false, cursor: 'c9' }))
+  const error = await listLibrary('/Ebook', { files: [known('/Ebook/a.cbz')], cursor: 'c8', root: '/Ebook' }).catch((e) => e)
+  expect(error).toBeInstanceOf(DropboxError)
+  expect(error.message.startsWith('path/not_found')).toBe(true)
+})

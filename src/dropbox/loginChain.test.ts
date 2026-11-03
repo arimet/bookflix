@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { APP_KEYS } from '../config'
 import { isLoggedIn } from './auth'
-import { completeLogin, LoginError, EXPIRED, MISMATCH, OFFLINE, startConnection } from './loginChain'
+import { completeLogin, LoginError, EXPIRED, MISMATCH, OFFLINE, restartConnection, startConnection } from './loginChain'
 
 const store = (app: string, auth: object) =>
   localStorage.setItem(`bookflix.auth.${app}`, JSON.stringify({ refreshToken: 'R', accessToken: 'A', expiresAt: Date.now() + 3600_000, ...auth }))
@@ -84,4 +84,15 @@ test('a lost PKCE verifier asks to start over', async () => {
   sessionStorage.clear()
   const error = await completeLogin('library', 'c', 'redirect').catch((e) => e)
   expect(error.message).toBe(EXPIRED)
+})
+
+test('starting over forgets both apps and asks Dropbox for the account again', async () => {
+  store('library', { accountId: 'dbid:1' })
+  localStorage.setItem('bookflix.forceReauth', '1')
+  await restartConnection('redirect')
+  const url = new URL(assign.mock.calls[0][0])
+  expect(url.searchParams.get('client_id')).toBe(APP_KEYS.library)
+  expect(url.searchParams.get('force_reauthentication')).toBe('true')
+  expect(isLoggedIn('library')).toBe(false)
+  expect(localStorage.getItem('bookflix.forceReauth')).toBe('1')
 })

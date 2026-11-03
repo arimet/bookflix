@@ -1,4 +1,4 @@
-import { Box, Flex, Stack } from '@chakra-ui/react'
+import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react'
 
 // Netflix's turning red ring (styles in theme.ts).
 export const Loader = ({ small }: { small?: boolean }) => (
@@ -23,6 +23,18 @@ export function LibrarySkeleton() {
             </Flex>
           </Box>
         ))}
+      </Stack>
+    </Box>
+  )
+}
+
+// In place of a loader that would turn for ever: what went wrong, and a way to try again.
+export function RetryScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Box minH="100dvh" display="grid" placeItems="center" p="6">
+      <Stack gap="4" align="center" textAlign="center" maxW="sm">
+        <Text color="muted" role="alert">{message}</Text>
+        <Button bg="brand" color="white" onClick={onRetry}>Réessayer</Button>
       </Stack>
     </Box>
   )

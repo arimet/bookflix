@@ -19,6 +19,15 @@ export async function startConnection(mode: Mode): Promise<void> {
   return startLogin('sync', mode, { forceReauth })
 }
 
+// After a mismatch the wrong account may have been the first one: drop both and pick the account again,
+// for the library now and for the sync next (the flag stays set for it).
+export async function restartConnection(mode: Mode): Promise<void> {
+  logout('library')
+  logout('sync')
+  localStorage.setItem(FORCE_REAUTH_KEY, '1')
+  return startLogin('library', mode, { forceReauth: true })
+}
+
 export async function completeLogin(app: DropboxApp, code: string, mode: Mode): Promise<'next' | 'done'> {
   try {
     await finishLogin(app, code, mode)
