@@ -9,6 +9,7 @@ export class AuthError extends Error {
 }
 
 export type Mode = 'redirect' | 'code'
+export const EXPIRED = 'La connexion a expiré, recommence.'
 // accountId: missing on tokens saved before it was kept.
 type StoredAuth = { refreshToken: string; accessToken: string; expiresAt: number; accountId?: string }
 
@@ -67,7 +68,7 @@ function save(app: DropboxApp, auth: StoredAuth) {
 export async function finishLogin(app: DropboxApp, code: string, mode: Mode): Promise<void> {
   const store = verifierStore(mode)
   const verifier = store.getItem(verifierKey(app))
-  if (!verifier) throw new Error('La connexion a expiré, recommence.')
+  if (!verifier) throw new Error(EXPIRED)
   const params: Record<string, string> = {
     grant_type: 'authorization_code',
     code: code.trim(),

@@ -2,7 +2,9 @@ import { Button, Stack, Text } from '@chakra-ui/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DropboxApp } from './config'
 import { listLibrary, type LibraryListing } from './dropbox/api'
-import { AuthError, finishLogin, isLoggedIn, logout } from './dropbox/auth'
+import { AuthError, isLoggedIn, loginErrorFromUrl, logout } from './dropbox/auth'
+import { completeLogin, startConnection } from './dropbox/loginChain'
+import { FullLoader } from './components/Loader'
 import { SeriesModal } from './components/SeriesModal'
 import { AvatarDialog } from './components/AvatarDialog'
 import { ConfirmDialog, type Confirm } from './components/ConfirmDialog'
@@ -45,6 +47,9 @@ export default function App() {
   // Once the user has navigated inside the app, "back" can simply go back in history.
   const navigatedInApp = useRef(false)
   const [error, setError] = useState<string | null>(null)
+  const [loginError, setLoginError] = useState<string | null>(null)
+  // A Dropbox code is being exchanged: no login button flashes between the two Dropbox screens.
+  const [connecting, setConnecting] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [pinOpen, setPinOpen] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
@@ -59,13 +64,29 @@ export default function App() {
     else setError(e instanceof TypeError ? 'Pas de connexion réseau.' : String((e as Error)?.message ?? e))
   }, [])
 
+  // Back from Dropbox: finish this app, then go straight on to the other one (see loginChain).
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const code = params.get('code')
     const app = params.get('state') as DropboxApp | null
-    if (!code || (app !== 'library' && app !== 'sync')) return
+    const refused = loginErrorFromUrl(params)
+    if (!refused && (!code || (app !== 'library' && app !== 'sync'))) return
     history.replaceState(null, '', location.pathname + location.hash)
-    finishLogin(app, code, 'redirect').then(() => setConnected(connectedApps()), onError)
+    if (refused) return setLoginError(refused.message)
+    setConnecting(true)
+    completeLogin(app!, code!, 'redirect').then(
+      (step) => {
+        // 'next' leaves for Dropbox again: the loader stays until the page goes.
+        if (step === 'next') return startConnection('redirect')
+        setConnected(connectedApps())
+        setConnecting(false)
+      },
+    ).catch((e) => {
+      setConnected(connectedApps())
+      setConnecting(false)
+      if (e instanceof AuthError) onError(e)
+      else setLoginError((e as Error).message)
+    })
   }, [onError])
 
   useEffect(() => {
@@ -221,8 +242,11 @@ export default function App() {
 
   return (
     <>
-      {!loggedIn ? (
-        <LoginScreen connected={connected} onDone={() => setConnected(connectedApps())} onError={onError} />
+      {connecting ? (
+        <FullLoader />
+      ) : !loggedIn ? (
+        <LoginScreen connected={connected} error={loginError} onDone={() => { setLoginError(null); setConnected(connectedApps()) }}
+          onError={onError} />
       ) : !profileId ? (
         <ProfilesScreen onPick={(p) => pickProfile(p.id)} onError={onError} />
       ) : readingBook ? (

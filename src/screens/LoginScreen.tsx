@@ -1,55 +1,71 @@
-import { Box, Button, Input, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, chakra, Input, Stack, Text } from '@chakra-ui/react'
 import { Logo } from '../components/Logo'
 import { useState } from 'react'
-import { LIBRARY_NAME, type DropboxApp } from '../config'
-import { finishLogin, startLogin } from '../dropbox/auth'
+import type { DropboxApp } from '../config'
+import { completeLogin, startConnection } from '../dropbox/loginChain'
 
 // An installed iOS web app may not get the OAuth redirect back, so it also offers the copy-paste code flow.
 const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
 
-const STEPS: { app: DropboxApp; title: string; detail: string }[] = [
-  { app: 'library', title: '1. Ta bibliothèque', detail: `Lecture seule du dossier ${LIBRARY_NAME}.` },
-  { app: 'sync', title: '2. La synchro', detail: 'Profils et progression, dans un dossier à part.' },
-]
+type Props = { connected: Record<DropboxApp, boolean>; error: string | null; onDone: () => void; onError: (e: unknown) => void }
 
-type Props = { connected: Record<DropboxApp, boolean>; onDone: (app: DropboxApp) => void; onError: (e: unknown) => void }
-
-export function LoginScreen({ connected, onDone, onError }: Props) {
+export function LoginScreen({ connected, error, onDone, onError }: Props) {
   const [codeFor, setCodeFor] = useState<DropboxApp | null>(null)
   const [code, setCode] = useState('')
-  const next = STEPS.find((s) => !connected[s.app])
+  const [codeError, setCodeError] = useState<string | null>(null)
+  const halfway = connected.library && !connected.sync
+  const shown = codeError ?? error
+
+  // Code mode: Safari blocks a window opened outside a click, so the second app waits for the "2/2" button.
+  const startCode = () => {
+    setCodeError(null)
+    startConnection('code').then(() => setCodeFor(connected.library ? 'sync' : 'library'), onError)
+  }
+  const submitCode = (app: DropboxApp) =>
+    completeLogin(app, code, 'code').then(
+      // After the first code the library is connected and this screen turns to step 2/2.
+      () => {
+        setCode('')
+        setCodeFor(null)
+        onDone()
+      },
+      (e) => setCodeError((e as Error).message),
+    )
 
   return (
     <Box minH="100dvh" display="grid" placeItems="center" p="6">
       <Stack gap="6" maxW="sm" w="full" textAlign="center">
         <Logo fontSize="5xl" />
         <Text color="muted">Tes livres et mangas, depuis ton Dropbox.</Text>
-        {STEPS.map((step) => (
-          <Stack key={step.app} gap="2" p="5" rounded="md" bg="panel" opacity={step === next || connected[step.app] ? 1 : 0.5}>
-            <Text fontWeight="semibold">{step.title} {connected[step.app] && '✓'}</Text>
-            <Text fontSize="sm" color="muted">{step.detail}</Text>
-            {step === next && (
-              <>
-                <Button bg="brand" color="white" onClick={() => startLogin(step.app, 'redirect').catch(onError)}>Se connecter à Dropbox</Button>
-                {standalone && codeFor !== step.app && (
-                  <Button variant="ghost" onClick={() => startLogin(step.app, 'code').then(() => setCodeFor(step.app), onError)}>
-                    Se connecter avec un code
-                  </Button>
-                )}
-                {codeFor === step.app && (
-                  <Stack as="form" gap="3" onSubmit={(e) => {
-                    e.preventDefault()
-                    finishLogin(step.app, code, 'code').then(() => { setCode(''); setCodeFor(null); onDone(step.app) }, onError)
-                  }}>
-                    <Text fontSize="sm">Autorise Bookflix dans Dropbox, puis colle ici le code affiché.</Text>
-                    <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code Dropbox" autoComplete="off" />
-                    <Button type="submit" disabled={!code.trim()}>Valider</Button>
-                  </Stack>
-                )}
-              </>
-            )}
-          </Stack>
-        ))}
+        <Stack gap="3" p="5" rounded="md" bg="panel">
+          <Text fontWeight="semibold">{halfway ? 'Il reste une étape : la synchro.' : 'Connecte ton Dropbox'}</Text>
+          <Text fontSize="sm" color="muted">
+            {halfway
+              ? 'Dropbox doit encore autoriser Bookflix à ranger profils et progression dans un dossier à part.'
+              : 'Dropbox va te demander deux autorisations : lire tes livres, sans jamais pouvoir les modifier, puis ranger profils et progression dans un dossier à part.'}
+          </Text>
+          {shown && <Text fontSize="sm" color="brand" role="alert">{shown}</Text>}
+          {!codeFor && (
+            <Button bg="brand" color="white" onClick={() => startConnection('redirect').catch(onError)}>
+              {halfway ? 'Continuer' : 'Se connecter à Dropbox'}
+            </Button>
+          )}
+          {standalone && !codeFor && (
+            <Button variant="ghost" onClick={startCode}>
+              {halfway ? 'Autoriser la synchro (2/2)' : 'Se connecter avec un code'}
+            </Button>
+          )}
+          {codeFor && (
+            <Stack as="form" gap="3" onSubmit={(e) => { e.preventDefault(); submitCode(codeFor) }}>
+              <Text fontSize="sm">
+                {codeFor === 'library' ? 'Autorisation 1/2' : 'Autorisation 2/2'} : accepte dans Dropbox, puis colle ici le code affiché.
+              </Text>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code Dropbox" autoComplete="off" />
+              <Button type="submit" disabled={!code.trim()}>Valider</Button>
+            </Stack>
+          )}
+        </Stack>
+        <chakra.a href="confidentialite.html" fontSize="xs" color="muted" _hover={{ color: 'white' }}>Confidentialité</chakra.a>
       </Stack>
     </Box>
   )
