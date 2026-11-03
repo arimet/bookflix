@@ -1,7 +1,6 @@
 import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react'
 import { DebugLog, DEBUG } from '../components/DebugLog'
 import { Loader } from '../components/Loader'
-import { PageIndicator } from '../components/PageIndicator'
 import { Shell } from '../components/PinDialogs'
 import { ZoomPageBar } from '../components/ZoomPageBar'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
@@ -200,11 +199,10 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
             bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
             <Loader />
           </Box>
-          {/* One line at the bottom: the page buttons while zoomed on the left, the page number on the right. */}
-          <Flex position="absolute" left="0" right="0" bottom="0" p="2" align="center" pointerEvents="none">
+          {/* The page number is in the menu: no floating percentage over the page. */}
+          <Box position="absolute" left="2" bottom="2">
             <ZoomPageBar reader={reader} />
-            <PageIndicator reader={reader} chapters={book.format === 'epub'} />
-          </Flex>
+          </Box>
         </ReactReader>
       </Box>
       {DEBUG && <DebugLog reader={reader} />}

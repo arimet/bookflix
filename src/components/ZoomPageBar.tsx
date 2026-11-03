@@ -20,7 +20,7 @@ export function ZoomPageBar({ reader }: { reader?: AppReader }) {
 
   if (!reader || !zoomed) return null
   return (
-    <HStack gap="1" p="0.5" pointerEvents="auto" bg="bg.panel" shadow="sm" borderRadius="md"
+    <HStack gap="1" p="0.5" bg="bg.panel" shadow="sm" borderRadius="md"
       animationName="fade-in" animationDuration="moderate">
       <IconButton aria-label="Page de gauche" variant="ghost" size="sm" onClick={() => turnTowards(reader, 'left')}>
         <LuChevronLeft />
