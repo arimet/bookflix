@@ -2,7 +2,7 @@ import { Box, Button, chakra, Input, Stack, Text } from '@chakra-ui/react'
 import { Logo } from '../components/Logo'
 import { useState } from 'react'
 import type { DropboxApp } from '../config'
-import { completeLogin, startConnection } from '../dropbox/loginChain'
+import { completeLogin, OFFLINE, startConnection } from '../dropbox/loginChain'
 
 // An installed iOS web app may not get the OAuth redirect back, so it also offers the copy-paste code flow.
 const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
@@ -29,7 +29,11 @@ export function LoginScreen({ connected, error, onDone, onError }: Props) {
         setCodeFor(null)
         onDone()
       },
-      (e) => setCodeError((e as Error).message),
+      (e) => {
+        setCodeError((e as Error).message)
+        // Only a network failure can be retried with the same code: anything else needs a new authorization.
+        if ((e as Error).message !== OFFLINE) setCodeFor(null)
+      },
     )
 
   return (

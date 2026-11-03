@@ -114,10 +114,20 @@ export default function App() {
   const loggedIn = connected.library && connected.sync
   const ready = loggedIn && !!profileId && libraryRoot !== null
 
+  // Read again at every start: the folder known here gives an instant start, but the admin may have
+  // changed it from another device since.
   useEffect(() => {
-    if (!loggedIn || libraryRoot !== null) return
-    resolveLibraryRoot().then((found) => ('root' in found ? setLibraryRoot(found.root) : setPicking({ cancellable: false })), onError)
-  }, [loggedIn, libraryRoot, onError])
+    if (!loggedIn) return
+    const known = cachedLibraryRoot()
+    resolveLibraryRoot().then((found) => {
+      if (!('root' in found)) return setPicking({ cancellable: false })
+      if (known !== null && found.root !== known) {
+        localStorage.removeItem(LIBRARY_KEY)
+        setLibrary(null)
+      }
+      setLibraryRoot(found.root)
+    }, onError)
+  }, [loggedIn, onError])
 
   useEffect(() => {
     if (!ready) return
@@ -223,13 +233,19 @@ export default function App() {
   }, [notice])
 
   // A new folder: the old listing and its cursor are of no use, the load effect lists the new one.
-  const pickFolder = (root: string) =>
-    saveLibraryRoot(root).then(() => {
+  const pickFolder = (root: string) => {
+    // The same folder again (e.g. recreated after it vanished): nothing changes but the listing, read afresh.
+    if (root === libraryRoot) {
+      setPicking(null)
+      return reload()
+    }
+    return saveLibraryRoot(root).then(() => {
       localStorage.removeItem(LIBRARY_KEY)
       setLibrary(null)
       setLibraryRoot(root)
       setPicking(null)
     }, onError)
+  }
 
   const becomeAdmin = (profile: Profile, then?: () => void) => setConfirming({
     title: 'Devenir admin ?', text: `${profile.name} suivra les demandes de tous les profils. Pense à lui mettre un code PIN.`,
