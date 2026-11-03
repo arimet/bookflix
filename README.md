@@ -10,9 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="#deploy-your-own">Deploy your own</a> ·
+  <a href="https://arimet.github.io/bookflix/"><b>Open Bookflix</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#host-your-own-copy">Host your own copy</a> ·
   <a href="#local-development">Development</a>
 </p>
 
@@ -20,7 +21,18 @@
 
 Bookflix is a static web app that you install on your home screen. There is no server and no account to create:
 it reads your books from a Dropbox folder, and keeps everything it needs (profiles, reading positions, covers)
-in a small folder of that same Dropbox. Each household deploys its own copy on GitHub Pages in about ten minutes.
+in a small folder of that same Dropbox.
+
+## Use Bookflix
+
+1. Open **https://arimet.github.io/bookflix/**.
+2. Tap **Se connecter à Dropbox** and accept the two Dropbox screens: one lets Bookflix read your books (it can never
+   change them), the other gives it a folder of its own for profiles and reading positions.
+3. Pick the folder that holds your books, create a profile, and read.
+
+To install it: in Safari on iPhone or iPad, **Share › Add to Home Screen**; on a Mac, **File › Add to Dock** in Safari,
+or the install button in Chrome's address bar. See the [privacy page](https://arimet.github.io/bookflix/confidentialite.html)
+for what Bookflix reads and writes.
 
 ## Features
 
@@ -63,8 +75,8 @@ Bookflix connects to Dropbox through **two Dropbox apps**, so that it can never 
 
 | App | Access | Used for |
 | --- | --- | --- |
-| **Library** | Whole Dropbox, **read-only** | Listing and reading the books in your library folder (`/Ebook` by default). |
-| **Sync** | Its own app folder, read and write | Profiles, reading positions, per-book settings, covers and requests. |
+| **Library** | Whole Dropbox, **read-only** | Listing and reading the books in the folder each household picks. |
+| **Sync** | Its own app folder, read and write | Profiles, reading positions, per-book settings, covers, requests and the chosen books folder. |
 
 Sign-in uses OAuth 2 with PKCE: there is no secret. The app keys ship in the page like in any web app, and they give
 access to nothing without a sign-in to your Dropbox account.
@@ -82,9 +94,10 @@ Any layout works. Every folder holding books is a series, and a book alone at th
 
 A series goes to *Comics & manga* when most of its files are CBZ or CBR, otherwise to *Books*.
 
-## Deploy your own
+## Host your own copy
 
-You need a GitHub account and a Dropbox account. Count ten minutes.
+Only if you want your own instance: anyone can use the shared site above. You need a GitHub account and a Dropbox
+account. Count ten minutes.
 
 ### 1. Fork this repository
 
@@ -114,7 +127,7 @@ In your fork: **Settings › Secrets and variables › Actions › Variables**.
 | --- | --- |
 | `VITE_DROPBOX_LIBRARY_KEY` | App key of the Library app |
 | `VITE_DROPBOX_SYNC_KEY` | App key of the Sync app |
-| `VITE_LIBRARY_ROOT` | *Optional.* Your books folder, e.g. `/Livres`. Defaults to `/Ebook`. |
+| `VITE_LIBRARY_ROOT` | *Optional.* Folder taken without asking when it exists, e.g. `/Livres`. Defaults to `/Ebook`. Each household can pick another one in the app. |
 | `VITE_GOOGLE_BOOKS_KEY` | *Optional, recommended.* A Google Books key for book requests (see below). |
 
 <details>
@@ -140,19 +153,22 @@ from the **Actions** tab, or push any commit. About a minute later the app is li
 - **iPhone, iPad**: open `<site>` in Safari, then **Share › Add to Home Screen**.
 - **Mac**: open `<site>` in Safari, then **File › Add to Dock**, or install it from Chrome's address bar.
 
-Open the installed app, connect **1. Ta bibliothèque** then **2. La synchro**, create your profile, and read.
+Open the installed app, tap **Se connecter à Dropbox**, accept the two Dropbox screens, pick your books folder, create
+your profile, and read.
 If the Dropbox sign-in does not come back to the installed iPhone app, use **Se connecter avec un code**: Dropbox
 shows a code that you paste into the app.
 
 ## Who can sign in
 
-While your Dropbox apps are in **Development** status (the default), only **your own Dropbox account** can connect
-to them. Someone who finds your site gets an error at the Dropbox sign-in and sees nothing of yours.
+Anyone with a **personal Dropbox account**. Each Dropbox sees only its own books and its own profiles; Bookflix has
+no server where they could meet. Dropbox Business team folders are not supported: only the member's own folders show.
 
 - **A household sharing one Dropbox**: create one profile per reader. A PIN keeps readers apart, but it is not a
-  security boundary: anyone signed in to that Dropbox can read the sync folder.
-- **People with their own Dropbox**: the simplest is that they deploy their own copy. You can also click
-  **Enable additional users** in the Dropbox App Console; each person then sees only their own books.
+  security boundary: anyone signed in to that Dropbox can read the sync folder. Only the admin profile can change
+  the books folder.
+- **Your own copy**: while your Dropbox apps are in **Development** status, only your account can connect. Click
+  **Enable additional users** in the Dropbox App Console to let up to 500 accounts in; past 50, Dropbox asks you to
+  apply for **Production** status, which needs a privacy policy (`public/confidentialite.html`).
 
 ## Local development
 
