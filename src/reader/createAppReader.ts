@@ -4,12 +4,45 @@ import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
 import { refitEnhancer } from '@prose-reader/enhancer-refit'
-import { map } from 'rxjs'
+import { concat, concatMap, defer, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
+
+type Offset = { horizontalOffset: number; verticalOffset: number }
+type LaidOut = { endOffset: Offset }
+type SpineLayout = {
+  spineItemsManager: { items: readonly unknown[] }
+  layOutItem: (item: unknown, offset: Offset) => Observable<LaidOut>
+  layOutItems: (laidOut: LaidOut[]) => Observable<LaidOut[]>
+}
+
+// prose-reader places the pages through one operator nested per page, all run on a single call stack: a
+// 299-page manga overflowed the iPhone's stack at page 196 and the error vanished, leaving every page at
+// position 0 and the loader up for good. Same placement, one page after the other on a flat stack.
+// ponytail: leans on prose-reader internals (spineLayout, layOutItem, layOutItems); recheck on upgrade.
+export const flatLayout =
+  <O, R extends { spine: unknown }>(next: (options: O) => R) =>
+  (options: O) => {
+    const reader = next(options)
+    const layout = (reader.spine as { spineLayout: SpineLayout }).spineLayout
+    layout.layOutItems = (laidOut) =>
+      defer(() => {
+        const placed = [...laidOut]
+        const start = { horizontalOffset: 0, verticalOffset: 0 }
+        return concat(
+          from(layout.spineItemsManager.items.slice(placed.length)).pipe(
+            concatMap((item) => layout.layOutItem(item, placed[placed.length - 1]?.endOffset ?? start)),
+            tap((item) => placed.push(item)),
+            ignoreElements(),
+          ),
+          defer(() => of(placed)),
+        )
+      })
+    return reader
+  }
 
 // Same order as the prose-reader demo, minus annotations, search and audio (out of scope).
 // pdfEnhancer replaces getResource for every item, so it is only applied to PDF books.
-export const createAppReader = refitEnhancer(galleryEnhancer(gesturesEnhancer(cbzEnhancer(createReader))))
-export const createPdfReader = refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(createReader)))))
+export const createAppReader = refitEnhancer(galleryEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader)))))
+export const createPdfReader = refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader))))))
 
 export type AppReader = ReturnType<typeof createAppReader>
 
