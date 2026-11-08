@@ -50,6 +50,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [nextDismissed, setNextDismissed] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const pageEls = useRef<HTMLDivElement[]>([])
   const ratios = useRef<Record<number, number>>({}) // width / height of the pages seen
@@ -215,7 +216,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
     const tap = { time: Date.now(), x: event.clientX, y: event.clientY }
     const double = isDoubleTap(lastTap.current, tap)
     lastTap.current = double ? undefined : tap
-    if (double && isPageZoomed()) resetPageZoom()
+    if (double && isPageZoomed()) resetPageZoom(rootRef.current)
     setMenuOpen((open) => !open) // on a double tap, undoes the first tap's
   }
 
@@ -232,7 +233,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
 
   const bg = themeBg(layout.theme)
   return (
-    <Box position="fixed" inset="0" bg={bg}>
+    <Box ref={rootRef} position="fixed" inset="0" bg={bg}>
       <Box ref={scrollerRef} position="absolute" top="env(safe-area-inset-top)" bottom="0" left="0" right="0"
         overflowY="auto" overflowX="hidden" overflowAnchor="none" touchAction="pan-x pan-y pinch-zoom" onScroll={onScroll} onClick={onTap}>
         <Box maxW={columnWidth(layout.width)} mx="auto" pb="env(safe-area-inset-bottom)">
