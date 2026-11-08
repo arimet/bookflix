@@ -1,4 +1,5 @@
-import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, Flex, IconButton, Stack, Text } from '@chakra-ui/react'
+import { BookCover } from '../components/BookCover'
 import { DebugLog, DEBUG } from '../components/DebugLog'
 import { Loader } from '../components/Loader'
 import { Shell } from '../components/PinDialogs'
@@ -6,10 +7,12 @@ import { ZoomPageBar } from '../components/ZoomPageBar'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
 import '@prose-reader/react-reader/index.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { LuPlay, LuX } from 'react-icons/lu'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
-import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnSideTaps, turnTowards, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
+import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnSideTaps, turnOnSwipeUpToClose, turnTowards, watchLastPage, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { openReader } from '../reader/openReader'
+import { readHref } from '../routes'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookDirection, type Direction } from '../sync/books'
 import { positionRecorder } from '../sync/positionRecorder'
 import { deviceName, flushPending, localProgress, recordProgress } from '../sync/progress'
@@ -33,11 +36,27 @@ const FLUSH_DELAY = 5000
 // prose-reader shows a zoom slider while zoomed in, with no setting to turn it off; pinching does the same.
 // ponytail: matches prose-reader's markup (the slider in a presence box right under the reader); recheck on upgrade.
 const HIDE_ZOOM_SLIDER = { '& [data-prose-react-reader] > [data-scope="presence"]:has(> [data-scope="slider"])': { display: 'none' } }
+// The page runs down to the bottom of the screen, under the iPhone's home bar; the bottom menu (the one with
+// the Help button) and the clock shown with it stay above that bar, the menu's background running under it.
+// ponytail: matches prose-reader's markup, like HIDE_ZOOM_SLIDER; recheck on upgrade.
+const ABOVE_HOME_BAR = {
+  '& [data-prose-react-reader] > [data-scope="presence"]:has([aria-label="Help"])': { paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' },
+  '& [data-prose-react-reader] > [data-scope="presence"]:not(:has(button)) > div:has(> p:only-child)': { bottom: 'env(safe-area-inset-bottom)' },
+}
+const CLOSE_DURATION = 200
 
-type Props = { book: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void }
+// next: the following volume of the series, offered on the last page.
+type Props = { book: Book; next?: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void }
 
-export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
+export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const sheetRef = useRef<HTMLDivElement | null>(null) // what a swipe up moves
+  const onBackRef = useRef(onBack)
+  useLayoutEffect(() => {
+    onBackRef.current = onBack
+  })
+  const [atEnd, setAtEnd] = useState(false)
+  const [nextDismissed, setNextDismissed] = useState(false)
   const [reader, setReader] = useState<AppReader>()
   // The reader whose first page is drawn; our loader covers it until then.
   const [drawn, setDrawn] = useState<AppReader>()
@@ -71,7 +90,24 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
     const ready = whenPageOnScreenReady(reader, () => setDrawn(reader))
     const unregisterTaps = turnOnSideTaps(reader)
     const pulls = turnOnEdgePulls(reader)
+    const end = watchLastPage(reader, setAtEnd)
+    const style = (transform: string, opacity: string, transition: string) => {
+      const sheet = sheetRef.current
+      if (sheet) Object.assign(sheet.style, { transform, opacity, transition })
+    }
+    const swipe = turnOnSwipeUpToClose(reader, {
+      onMove: (pull) => pull
+        ? style(`translateY(${pull}px)`, String(Math.max(0.3, 1 + pull / innerHeight)), 'none')
+        : style('', '', 'transform .25s, opacity .25s'),
+      onClose: () => {
+        style('translateY(-100%)', '0', `transform ${CLOSE_DURATION}ms ease-in, opacity ${CLOSE_DURATION}ms`)
+        setTimeout(() => onBackRef.current(), CLOSE_DURATION)
+      },
+    })
     return () => {
+      swipe.unsubscribe()
+      end.unsubscribe()
+      setAtEnd(false)
       pulls.unsubscribe()
       marks.unsubscribe()
       ready.unsubscribe()
@@ -174,9 +210,10 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
   }
 
   return (
-    <Box position="fixed" inset="0" bg={THEMES.find((t) => t.theme === layout.theme)!.bg} css={HIDE_ZOOM_SLIDER}>
-      {/* Installed on iPhone the app draws under the status bar: keep the reader and its header out of it. */}
-      <Box position="absolute" top="env(safe-area-inset-top)" bottom="env(safe-area-inset-bottom)"
+    <Box position="fixed" inset="0" bg={THEMES.find((t) => t.theme === layout.theme)!.bg} css={{ ...HIDE_ZOOM_SLIDER, ...ABOVE_HOME_BAR }}>
+      {/* Installed on iPhone the app draws under the status bar: keep the reader and its header out of it.
+          At the bottom the page goes down to the edge, as in Photos (ABOVE_HOME_BAR). */}
+      <Box ref={sheetRef} position="absolute" top="env(safe-area-inset-top)" bottom="0"
         left="env(safe-area-inset-left)" right="env(safe-area-inset-right)">
         <ReactReader
           reader={reader}
@@ -202,15 +239,38 @@ export function ReaderScreen({ book, profileId, onBack, onError }: Props) {
             <Loader />
           </Box>
           {/* The page number is in the menu: no floating percentage over the page. */}
-          <Box position="absolute" left="2" bottom="2">
+          <Box position="absolute" left="2" bottom="calc(0.5rem + env(safe-area-inset-bottom))">
             <ZoomPageBar reader={reader} />
           </Box>
+          {next && atEnd && !nextDismissed && reader && drawn === reader && (
+            <NextVolume book={next} onClose={() => setNextDismissed(true)} />
+          )}
         </ReactReader>
       </Box>
       {DEBUG && <DebugLog reader={reader} />}
       <ReaderSettings open={menuOpen} onClose={() => setMenuOpen(false)} layout={layout} onLayout={changeLayout}
         direction={direction} onDirection={changeDirection} />
     </Box>
+  )
+}
+
+// On the last page of a volume, the next one of the series. Replaces the book in the history: back still
+// leads to the series.
+function NextVolume({ book, onClose }: { book: Book; onClose: () => void }) {
+  return (
+    <Flex position="absolute" insetX="4" bottom="calc(1rem + env(safe-area-inset-bottom))" mx="auto" maxW="sm" p="3" gap="3"
+      align="center" bg="bg.panel" rounded="lg" shadow="lg" animationName="slide-from-bottom, fade-in" animationDuration="moderate">
+      <Box w="10" flexShrink={0}><BookCover book={book} small /></Box>
+      <Stack gap="0" flex="1" minW="0">
+        <Text fontSize="xs" color="fg.muted">Tome suivant</Text>
+        <Text fontSize="sm" fontWeight="semibold" lineClamp={2}>{book.title}</Text>
+      </Stack>
+      <Button size="sm" bg="white" color="black" fontWeight="bold" _hover={{ bg: 'whiteAlpha.800' }}
+        onClick={() => location.replace(readHref(book))}>
+        <LuPlay fill="currentColor" /> Lire
+      </Button>
+      <IconButton aria-label="Fermer" size="sm" variant="ghost" onClick={onClose}><LuX /></IconButton>
+    </Flex>
   )
 }
 

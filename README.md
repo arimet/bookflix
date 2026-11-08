@@ -38,7 +38,7 @@ for what Bookflix reads and writes.
 
 **Library**
 - Reads **EPUB, CBZ, CBR and PDF**.
-- A Netflix home page: the book you are reading as a poster, then rows (Continue reading, Downloaded, Recently added,
+- A Netflix home page: the book you are reading as a poster (a series picked at random when none is), then rows (Continue reading, Downloaded, Recently added,
   Comics & manga, Books).
 - Each folder is a series; its sheet lists the volumes like episodes.
 - Search by folder or author (shows their series) or by book title (shows the book).
@@ -47,6 +47,8 @@ for what Bookflix reads and writes.
 **Reading**
 - One page in a centred column; width, line height and theme (dark, sepia, light) are adjustable.
 - Right-to-left reading for manga, set per book.
+- A long swipe up closes the book, as with a photo on iPhone.
+- On the last page of a volume, the next one of the series is offered.
 - Comics not on the device are read page by page from Dropbox, without waiting for the whole file.
 - Download volumes to read offline; the app itself works offline once installed.
 

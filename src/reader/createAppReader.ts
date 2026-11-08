@@ -4,7 +4,7 @@ import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
 import { refitEnhancer } from '@prose-reader/enhancer-refit'
-import { concat, concatMap, defer, filter, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
+import { concat, concatMap, defer, distinctUntilChanged, filter, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
 
 type Offset = { horizontalOffset: number; verticalOffset: number }
 type LaidOut = { endOffset: Offset }
@@ -132,5 +132,56 @@ export function turnOnEdgePulls(reader: AppReader) {
       const width = reader.viewport.value.element.clientWidth
       const side = edgePullSide({ startX: from.x, endX: zoom.currentPosition.x, deltaX: event.deltaX }, width * (1 - zoom.currentScale), width)
       if (side) turnTowards(reader, side)
+    })
+}
+
+type PageEdge = { spineItemIndex: number | undefined; pageIndexInSpineItem: number | undefined; numberOfPagesInSpineItem: number }
+
+// Whether the last page of the book is on screen (a spread counts by its right-hand or lower page).
+export const isAtLastPage = (end: PageEdge, numberOfItems: number) =>
+  numberOfItems > 0 && end.spineItemIndex === numberOfItems - 1 && end.pageIndexInSpineItem === end.numberOfPagesInSpineItem - 1
+
+// Calls onChange(true) when the last page of the book comes on screen, onChange(false) when it leaves.
+export function watchLastPage(reader: AppReader, onChange: (atEnd: boolean) => void) {
+  return reader.pagination.state$
+    .pipe(
+      filter((state) => state.isSettled),
+      map((state) => isAtLastPage(state.end, reader.spineItemsManager.items.length)),
+      distinctUntilChanged(),
+    )
+    .subscribe(onChange)
+}
+
+// How far up, as a share of the screen height, a swipe must go to close the book.
+const CLOSE_PULL = 0.2
+
+// How far up the swipe has moved the page: 0 for a swipe that is not mostly upwards.
+export const upwardPull = (pan: { deltaX: number; deltaY: number }) =>
+  pan.deltaY < 0 && -pan.deltaY > Math.abs(pan.deltaX) ? pan.deltaY : 0
+
+export const isClosingSwipe = (pan: { deltaX: number; deltaY: number }, height: number) => upwardPull(pan) < -height * CLOSE_PULL
+
+// Like closing a photo on iPhone: a long swipe up closes the book. onMove(pull) follows the finger (pull
+// is negative, 0 to put the page back), onClose ends it. Zoomed in, scrolling or with two fingers, a pan
+// keeps prose-reader's meaning.
+export function turnOnSwipeUpToClose(reader: AppReader, { onMove, onClose }: { onMove: (pull: number) => void; onClose: () => void }) {
+  let active = false
+  const followable = () =>
+    !isZoomedIn(reader.zoom.state) && reader.settings.values.computedPageTurnMode !== 'scrollable'
+    && reader.settings.values.computedPageTurnDirection === 'horizontal'
+  return reader.gestures.gestures$
+    .pipe(filter((gesture) => gesture.type === 'pan'))
+    .subscribe(({ gestureEvent: event }) => {
+      if (event.type === 'panStart') active = event.pointers.length === 1 && followable()
+      if (!active) return
+      // A second finger (a pinch) or a zoom on the way: not a swipe any more.
+      if (!followable() || (event.type === 'panMove' && event.pointers.length > 1)) {
+        active = false
+        return onMove(0)
+      }
+      if (event.type !== 'panEnd') return onMove(upwardPull(event))
+      active = false
+      if (isClosingSwipe(event, reader.viewport.value.element.clientHeight)) onClose()
+      else onMove(0)
     })
 }
