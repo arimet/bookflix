@@ -42,7 +42,37 @@ export const flatLayout =
 const PAN_Y = '{ touch-action: pan-y !important }'
 // Undoes the columns prose-reader lays a chapter out in, even when scrolling (a page beside the other, all but
 // the first out of sight): the chapter runs down as one strip, which prose-reader then sizes the frame to.
-const ONE_STRIP = 'html body { height: auto !important; column-width: auto !important; column-count: auto !important; overflow-y: visible !important }'
+// Its top and bottom margins become padding: prose-reader sizes the frame to the body without its margins, which
+// cut the last line of each chapter (24 px, prose-reader's page margin).
+const ONE_STRIP = `html body {
+  height: auto !important; column-width: auto !important; column-count: auto !important; overflow-y: visible !important;
+  margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 24px !important; padding-bottom: 24px !important;
+}`
+
+// Scrolling back must not reload what was just read: the last chapters (or comic pages, much heavier: a few
+// only, Safari on iPhone kills the tab past about 7 big pages) seen stay loaded.
+const KEPT_CHAPTERS = 20
+const KEPT_COMIC_PAGES = 4
+
+// Holds the last `limit` items visited (hold returns the release), releasing the oldest beyond.
+export function recentlyVisited(limit: number, hold: (id: string) => () => void) {
+  const held = new Map<string, () => void>()
+  return {
+    visit(id: string) {
+      const release = held.get(id)
+      held.delete(id)
+      held.set(id, release ?? hold(id)) // last in the map: the most recent
+      if (held.size <= limit) return
+      const [oldest, releaseOldest] = held.entries().next().value!
+      held.delete(oldest)
+      releaseOldest()
+    },
+    releaseAll() {
+      held.forEach((release) => release())
+      held.clear()
+    },
+  }
+}
 
 // Scrolling down, as prose-reader 36 does it, does not work on iPhone:
 // - a finger cannot scroll: the gestures put touch-action: none on the whole reader, and the CSS of comic pages,
@@ -51,6 +81,7 @@ const ONE_STRIP = 'html body { height: auto !important; column-width: auto !impo
 //   stay with the gestures.
 // - an EPUB chapter shows its first page only (ONE_STRIP); openReader also marks the book scrolled-continuous,
 //   for prose-reader to size each chapter to its content.
+// - scrolling back reloads what was just read, prose-reader keeping one item on each side only.
 // ponytail: works around prose-reader 36; recheck on upgrade.
 export const scrollingFixes =
   <O, R extends Reader>(next: (options: O) => R) =>
@@ -69,9 +100,17 @@ export const scrollingFixes =
       const doc = documentOf(item.id)
       if (doc && reader.spineItemsManager.get(item.id)?.renditionLayout === 'reflowable') reader.utils.injectScopedCSS(doc, 'bookflix-strip', ONE_STRIP)
     })
+    const comics = reader.context.manifest?.renditionLayout === 'pre-paginated'
+    const kept = recentlyVisited(comics ? KEPT_COMIC_PAGES : KEPT_CHAPTERS, (id) => reader.keepSpineItemLoaded(id))
+    const visits = reader.navigation.navigation$.subscribe(() => {
+      const item = reader.spineItemsManager.get(reader.navigation.getNavigation().spineItem)
+      if (item) kept.visit(item.item.id)
+    })
     return {
       ...reader,
       destroy: () => {
+        visits.unsubscribe()
+        kept.releaseAll()
         removeOuter()
         reader.destroy()
       },

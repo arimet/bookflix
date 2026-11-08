@@ -1,6 +1,6 @@
 import { Subject } from 'rxjs'
 import { describe, expect, it, vi } from 'vitest'
-import { isAtLastPage, isClosingSwipe, turnOnSwipeUpToClose, upwardPull, type AppReader } from './createAppReader'
+import { isAtLastPage, isClosingSwipe, recentlyVisited, turnOnSwipeUpToClose, upwardPull, type AppReader } from './createAppReader'
 
 describe('upwardPull', () => {
   it('follows a swipe that goes mostly up', () => {
@@ -81,5 +81,21 @@ describe('turnOnSwipeUpToClose', () => {
     swipeUp()
     expect(moves).toEqual([])
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('recentlyVisited', () => {
+  it('keeps the last items visited loaded, releasing the oldest, and holds each once', () => {
+    const released: string[] = []
+    const hold = vi.fn((id: string) => () => released.push(id))
+    const kept = recentlyVisited(2, hold)
+    kept.visit('a')
+    kept.visit('b')
+    kept.visit('a') // seen again: the most recent now, not held twice
+    kept.visit('c')
+    expect(hold.mock.calls.map(([id]) => id)).toEqual(['a', 'b', 'c'])
+    expect(released).toEqual(['b'])
+    kept.releaseAll()
+    expect(released.sort()).toEqual(['a', 'b', 'c'])
   })
 })
