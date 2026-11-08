@@ -7,6 +7,7 @@ import { NextVolume } from '../components/NextVolume'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
 import { pageAt, pageCfi, pageOfCfi, stripPercent } from '../reader/comicStrip'
+import { isDoubleTap, isPageZoomed, resetPageZoom } from '../reader/pageZoom'
 import { openComic } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, setBookSetting, type BookSetting, type Direction } from '../sync/books'
 import { deviceName, flushPending, localProgress, recordProgress } from '../sync/progress'
@@ -207,6 +208,17 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
     }
   }, [profileId])
 
+  // A tap shows or hides the menu. A double tap on a zoomed page puts the zoom back too, the menu left as it was
+  // before. touchAction keeps the browser from zooming on a double tap itself.
+  const lastTap = useRef<{ time: number; x: number; y: number }>(undefined)
+  const onTap = (event: React.MouseEvent) => {
+    const tap = { time: Date.now(), x: event.clientX, y: event.clientY }
+    const double = isDoubleTap(lastTap.current, tap)
+    lastTap.current = double ? undefined : tap
+    if (double && isPageZoomed()) resetPageZoom()
+    setMenuOpen((open) => !open) // on a double tap, undoes the first tap's
+  }
+
   const changeBook = async (changes: BookSetting) => {
     try {
       await setBookSetting(bookId, changes)
@@ -222,7 +234,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
   return (
     <Box position="fixed" inset="0" bg={bg}>
       <Box ref={scrollerRef} position="absolute" top="env(safe-area-inset-top)" bottom="0" left="0" right="0"
-        overflowY="auto" overflowX="hidden" overflowAnchor="none" onScroll={onScroll} onClick={() => setMenuOpen((open) => !open)}>
+        overflowY="auto" overflowX="hidden" overflowAnchor="none" touchAction="pan-x pan-y pinch-zoom" onScroll={onScroll} onClick={onTap}>
         <Box maxW={columnWidth(layout.width)} mx="auto" pb="env(safe-area-inset-bottom)">
           {comic?.pages.map((p, index) => (
             <StripPage key={p.id} index={index} url={urls[index]} ratio={ratios.current[index] ?? comic.ratio} onFit={fit}
@@ -244,7 +256,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
       )}
       {next && atEnd && !nextDismissed && <NextVolume book={next} onClose={() => setNextDismissed(true)} />}
       <ReaderSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} layout={layout} onLayout={changeLayout}
-        direction={comic?.direction} flow={{ flow: 'scroll', scrollOnly: false }} onBook={changeBook} text={false} />
+        direction={comic?.direction} flow={{ flow: 'scroll', scrollOnly: false }} onBook={changeBook} text={false} onReload={onReopen} />
     </Box>
   )
 }
