@@ -4,7 +4,7 @@ import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
 import { refitEnhancer } from '@prose-reader/enhancer-refit'
-import { asyncScheduler, concat, first, Subscription, concatMap, debounceTime, defer, distinctUntilChanged, EMPTY, filter, fromEvent, switchMap, throttleTime, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
+import { asyncScheduler, concat, concatMap, debounceTime, defer, distinctUntilChanged, EMPTY, filter, fromEvent, switchMap, throttleTime, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
 
 type Offset = { horizontalOffset: number; verticalOffset: number }
 type LaidOut = { endOffset: Offset }
@@ -39,13 +39,9 @@ export const flatLayout =
     return reader
   }
 
-// Both ways: zoomed in, the page is moved around by scrolling it (prose-reader's zoom when scrolling).
-const PAN = '{ touch-action: pan-x pan-y !important }'
-// Two fingers pinch the page: the browser must not scroll it, prose-reader ignores a pinch while it scrolls.
-const holdStillWhilePinching = (target: Document | HTMLElement) =>
-  fromEvent<TouchEvent>(target, 'touchmove', { passive: false }).subscribe((event) => {
-    if (event.touches.length > 1 && event.cancelable) event.preventDefault()
-  })
+// The browser scrolls, and zooms on a pinch: smoothly, where prose-reader's zoom lays the book out again at each
+// move of the fingers (openReader turns it off). Both ways, to move around a zoomed page.
+const PAN = '{ touch-action: pan-x pan-y pinch-zoom !important }'
 // Undoes the columns prose-reader lays a chapter out in, even when scrolling (a page beside the other, all but
 // the first out of sight): the chapter runs down as one strip, which prose-reader then sizes the frame to.
 // Its top and bottom margins become padding: prose-reader sizes the frame to the body without its margins, which
@@ -91,8 +87,8 @@ export function recentlyVisited(limit: number, hold: (id: string) => () => void)
 // Scrolling down, as prose-reader 36 does it, does not work on iPhone:
 // - a finger cannot scroll: the gestures put touch-action: none on the whole reader, and the CSS of comic pages,
 //   meant to let touches through in that mode, blocks them on every element (`:not(html.…-touch-enabled) body`
-//   matches any body). Pans are left to the browser, around the pages and on them; pinches and taps stay with
-//   the gestures, the browser kept from scrolling under a pinch.
+//   matches any body). Pans and pinches are left to the browser (PAN), around the pages and on them; taps stay
+//   with the gestures.
 // - an EPUB chapter shows its first page only (ONE_STRIP); openReader also marks the book scrolled-continuous,
 //   for prose-reader to size each chapter to its content.
 // - scrolling back reloads what was just read, prose-reader keeping one item on each side only.
@@ -106,21 +102,16 @@ export const scrollingFixes =
     if (reader.settings.values.computedPageTurnMode !== 'scrollable') return reader
     const container = `[data-prose-reader-container="${reader.id}"]`
     const removeOuter = reader.utils.injectScopedCSS(document, 'bookflix-scrolling', `${container}, ${container} * ${PAN}`)
-    const pinches = new Subscription()
-    pinches.add(reader.context.watch('rootElement')
-      .pipe(filter((root): root is HTMLElement => !!root), first())
-      .subscribe((root) => pinches.add(holdStillWhilePinching(root))))
     const documentOf = (itemId: string) => reader.spineItemsManager.get(itemId)?.renderer.getDocumentFrame()?.contentDocument
     reader.hookManager.register('item.onDocumentLoad', async ({ itemId }) => {
       const doc = documentOf(itemId)
-      if (!doc) return
-      reader.utils.injectScopedCSS(doc, 'bookflix-touch', `* ${PAN}`)
-      pinches.add(holdStillWhilePinching(doc))
+      if (doc) reader.utils.injectScopedCSS(doc, 'bookflix-touch', `* ${PAN}`)
     })
     // Before each layout: prose-reader sets the columns again, then measures the chapter.
     reader.hookManager.register('item.onBeforeLayout', ({ item }) => {
       const doc = documentOf(item.id)
-      if (doc && reader.spineItemsManager.get(item.id)?.renditionLayout === 'reflowable') reader.utils.injectScopedCSS(doc, 'bookflix-strip', ONE_STRIP)
+      const image = item.mediaType?.startsWith('image/') // a comic page, laid out by prose-reader as an image
+      if (doc && !image && reader.spineItemsManager.get(item.id)?.renditionLayout === 'reflowable') reader.utils.injectScopedCSS(doc, 'bookflix-strip', ONE_STRIP)
     })
     // A chapter that loads grows and pushes the others: what then comes on screen may be a chapter never loaded,
     // prose-reader looking at what to load only when the reader scrolls. A scroll event makes it look again.
@@ -162,7 +153,6 @@ export const scrollingFixes =
       destroy: () => {
         visits.unsubscribe()
         relook.unsubscribe()
-        pinches.unsubscribe()
         follow.unsubscribe()
         nearby.forEach((release) => release())
         kept.releaseAll()

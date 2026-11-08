@@ -225,6 +225,8 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
         <ReactReader
           reader={reader}
           enableFloatingProgress={false}
+          // Scrolling, the browser zooms on a pinch (readerOptions): prose-reader must not zoom too.
+          zoomMaxScale={flow?.flow === 'scroll' ? 1 : undefined}
           settings={settings}
           onSettingsChange={(changes) => setSettings((old) => ({ ...old, ...changes }))}
           onItemClick={(item) => {
