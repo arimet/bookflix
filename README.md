@@ -46,8 +46,8 @@ for what Bookflix reads and writes.
 
 **Reading**
 - One page in a centred column; width, line height and theme (dark, sepia, light) are adjustable.
-- Right-to-left reading for manga, set per book.
-- A long swipe up closes the book, as with a photo on iPhone.
+- Right-to-left reading for manga, and page by page or scrolling down (webtoons), set per book.
+- A long swipe up closes a book read page by page, as with a photo on iPhone.
 - On the last page of a volume, the next one of the series is offered.
 - Comics not on the device are read page by page from Dropbox, without waiting for the whole file.
 - Download volumes to read offline; the app itself works offline once installed.

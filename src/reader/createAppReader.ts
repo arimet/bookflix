@@ -39,10 +39,45 @@ export const flatLayout =
     return reader
   }
 
+const PAN_Y = '{ touch-action: pan-y !important }'
+
+type TouchScrollable = {
+  id: string
+  settings: { values: { computedPageTurnMode: string } }
+  hookManager: { register: (name: 'item.onDocumentLoad', run: (params: { documentContainer: HTMLElement }) => Promise<void>) => unknown }
+  utils: { injectScopedCSS: (doc: Document, scope: string, css: string) => () => void }
+  destroy: () => void
+}
+
+// A book read by scrolling down could not be scrolled with a finger: the gestures put touch-action: none on
+// the whole reader, and the CSS of comic pages, meant to let touches through in that mode, blocks them on
+// every element of the page (`:not(html.…-touch-enabled) body` matches any body). In that mode vertical
+// pans are left to the browser, around the pages and on them; pinches and taps stay with the gestures.
+// ponytail: works around prose-reader 36; recheck on upgrade.
+export const touchScrolling =
+  <O, R extends TouchScrollable>(next: (options: O) => R) =>
+  (options: O) => {
+    const reader = next(options)
+    if (reader.settings.values.computedPageTurnMode !== 'scrollable') return reader
+    const container = `[data-prose-reader-container="${reader.id}"]`
+    const removeOuter = reader.utils.injectScopedCSS(document, 'bookflix-touch-scrolling', `${container}, ${container} * ${PAN_Y}`)
+    reader.hookManager.register('item.onDocumentLoad', async ({ documentContainer }) => {
+      const doc = 'contentDocument' in documentContainer ? (documentContainer as HTMLIFrameElement).contentDocument : null
+      if (doc) reader.utils.injectScopedCSS(doc, 'bookflix-touch-scrolling', `* ${PAN_Y}`)
+    })
+    return {
+      ...reader,
+      destroy: () => {
+        removeOuter()
+        reader.destroy()
+      },
+    }
+  }
+
 // Same order as the prose-reader demo, minus annotations, search and audio (out of scope).
 // pdfEnhancer replaces getResource for every item, so it is only applied to PDF books.
-export const createAppReader = refitEnhancer(galleryEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader)))))
-export const createPdfReader = refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader))))))
+export const createAppReader = touchScrolling(refitEnhancer(galleryEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader))))))
+export const createPdfReader = touchScrolling(refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader)))))))
 
 export type AppReader = ReturnType<typeof createAppReader>
 

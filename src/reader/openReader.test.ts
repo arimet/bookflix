@@ -2,6 +2,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import type { Book } from '../library/library'
 import { getBookBlob, localBookBlob } from '../offline/offline'
 import { openArchive, openBook } from './openBook'
+import { createAppReader } from './createAppReader'
 import { openReader } from './openReader'
 import { createLocalArchive, createRemoteArchive } from './remoteZip'
 
@@ -51,4 +52,12 @@ test('a CBZ falls back to a full download when range reading fails', async () =>
   vi.mocked(getBookBlob).mockResolvedValue(new Blob(['x']))
   await openReader(book('cbz'), 'rtl', undefined)
   expect(getBookBlob).toHaveBeenCalled()
+})
+
+test('a book opens page by page unless set to scroll', async () => {
+  vi.mocked(localBookBlob).mockResolvedValue(null)
+  await openReader(book('cbz'), 'rtl', undefined)
+  expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ pageTurnMode: 'controlled' }))
+  await openReader(book('cbz'), 'rtl', undefined, 'scroll')
+  expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ pageTurnMode: 'scrollable' }))
 })

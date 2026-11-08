@@ -1,7 +1,7 @@
 import pdfjsViewerInlineCss from 'pdfjs-dist/web/pdf_viewer.css?inline'
 import { of } from 'rxjs'
 import type { Book } from '../library/library'
-import type { Direction } from '../sync/books'
+import type { Direction, Flow } from '../sync/books'
 import { createAppReader, createPdfReader, type AppReader } from './createAppReader'
 import { getBookBlob, localBookBlob } from '../offline/offline'
 import { openArchive, openBook } from './openBook'
@@ -15,15 +15,21 @@ type Target = { type: 'cfi'; value: string } | undefined
 // Safari on iPhone kill the tab. One on each side.
 const PRELOAD = { numberOfAdjacentSpineItemToPreLoad: 1 }
 
+// The reader's options for a book: scroll reads it as one strip from top to bottom. A book that asks for
+// scrolling itself (an EPUB in scrolled-continuous flow) scrolls either way.
+export const readerOptions = (flow: Flow) =>
+  ({ ...PRELOAD, pageTurnMode: flow === 'scroll' ? 'scrollable' : 'controlled' }) as const
+
 // EPUB documents load their CSS, fonts and images by URL, so they go through the service worker.
 // Comics and PDFs are served from the page: libarchive and pdf.js cannot run in a service worker.
-export async function openReader(book: Book, direction: Direction, target: Target): Promise<{ reader: AppReader; close: () => void }> {
+export async function openReader(book: Book, direction: Direction, target: Target, flow: Flow = 'pages'): Promise<{ reader: AppReader; close: () => void }> {
+  const options = readerOptions(flow)
   const local = await localBookBlob(book)
   // A CBZ is read page by page, from Dropbox or from the copy on the device, never unzipped whole.
   if (book.format === 'cbz') {
     try {
       const opened = await openArchive(await (local ? createLocalArchive(book, local) : createRemoteArchive(book)), direction)
-      return { reader: createAppReader({ ...PRELOAD, manifest: opened.manifest, getResource: opened.getResource, target }), close: opened.close }
+      return { reader: createAppReader({ ...options, manifest: opened.manifest, getResource: opened.getResource, target }), close: opened.close }
     } catch (e) {
       // Unzipping the same bytes whole would only fail later, after holding hundreds of MB in memory.
       if (local) throw e
@@ -33,12 +39,12 @@ export async function openReader(book: Book, direction: Direction, target: Targe
   const blob = local ?? (await getBookBlob(book))
   if (book.format === 'epub') {
     const { manifest, close } = await openEpub(book.id, blob, book.file.name, direction)
-    return { reader: createAppReader({ ...PRELOAD, manifest, target }), close }
+    return { reader: createAppReader({ ...options, manifest, target }), close }
   }
   const opened = await openBook(blob, book.file.name, book.format, direction)
   const reader: AppReader =
     book.format === 'pdf'
-      ? createPdfReader({ ...PRELOAD, manifest: opened.manifest, target, pdf: { pdfjsViewerInlineCss, getArchiveForItem: () => of(opened.archive) } })
-      : createAppReader({ ...PRELOAD, manifest: opened.manifest, getResource: opened.getResource, target })
+      ? createPdfReader({ ...options, manifest: opened.manifest, target, pdf: { pdfjsViewerInlineCss, getArchiveForItem: () => of(opened.archive) } })
+      : createAppReader({ ...options, manifest: opened.manifest, getResource: opened.getResource, target })
   return { reader, close: opened.close }
 }
