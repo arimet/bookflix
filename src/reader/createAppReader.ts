@@ -223,9 +223,9 @@ export function turnOnSideTaps(reader: AppReader) {
   )
 }
 
-// A double tap on a zoomed page puts the zoom back: prose-reader's (page by page) or the browser's (scrolling).
-// The second tap does nothing else.
-export function turnOnDoubleTapUnzoom(reader: AppReader) {
+// A double tap on a zoomed page puts the zoom back: prose-reader's (page by page) or the browser's (scrolling), both
+// animated; surface() is what eases back from the browser's zoom (see resetPageZoom). The second tap does nothing else.
+export function turnOnDoubleTapUnzoom(reader: AppReader, surface: () => HTMLElement | null) {
   let last: { time: number; x: number; y: number } | undefined
   return reader.gestures.hooks.register('beforeTapGesture', ({ event$ }) =>
     event$.pipe(
@@ -235,7 +235,7 @@ export function turnOnDoubleTapUnzoom(reader: AppReader) {
         last = double ? undefined : tap
         if (!double) return true
         if (isZoomedIn(reader.zoom.state)) reader.zoom.exit({ animate: true })
-        else if (isPageZoomed()) resetPageZoom()
+        else if (isPageZoomed()) resetPageZoom(surface())
         else return true
         return false
       }),

@@ -80,7 +80,7 @@ function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props 
     const marks = markSpineItemOnScreen(reader)
     const ready = whenPageOnScreenReady(reader, () => setDrawn(reader))
     const unregisterTaps = turnOnSideTaps(reader)
-    const unregisterDoubleTaps = turnOnDoubleTapUnzoom(reader)
+    const unregisterDoubleTaps = turnOnDoubleTapUnzoom(reader, () => sheetRef.current)
     const pulls = turnOnEdgePulls(reader)
     const end = watchLastPage(reader, setAtEnd)
     const style = (transform: string, opacity: string, transition: string) => {
