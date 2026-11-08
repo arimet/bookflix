@@ -77,11 +77,18 @@ export function readingNow(all: Series[], progress: ProgressMap): Book[] {
     .sort((a, b) => progress[b.id].updatedAt - progress[a.id].updatedAt)
 }
 
-export function heroPick(all: Series[], progress: ProgressMap): { series: Series; book: Book } | null {
+// The book in progress, else a series picked at random (random: a number in [0, 1)), at its first unread volume.
+export function heroPick(all: Series[], progress: ProgressMap, random: number): { series: Series; book: Book } | null {
   const book = readingNow(all, progress)[0]
   if (book) return { series: seriesOfBook(all, book.id)!, book }
-  const newest = recentlyAdded(all, 1)[0]
-  return newest ? { series: newest, book: newest.books[0] } : null
+  const picked = all[Math.floor(random * all.length)]
+  return picked ? { series: picked, book: resumeBook(picked, progress) } : null
+}
+
+// The volume after this one in its series, if any.
+export function nextInSeries(all: Series[], bookId: string): Book | undefined {
+  const books = seriesOfBook(all, bookId)?.books ?? []
+  return books[books.findIndex((b) => b.id === bookId) + 1]
 }
 
 export type HistoryItem = { book: Book; series: Series; entry: ProgressMap[string] }

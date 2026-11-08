@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import type { DbxFile } from '../dropbox/api'
 import type { ProgressMap } from '../sync/progress'
-import { buildSeries, heroPick, newestBook, ofKind, readingHistory, recentlyAdded, resumeBook, searchLibrary, seriesOfBook } from './catalog'
+import { buildSeries, heroPick, newestBook, nextInSeries, ofKind, readingHistory, recentlyAdded, resumeBook, searchLibrary, seriesOfBook } from './catalog'
 import { buildTree } from './library'
 
 const f = (path: string, serverModified = '2026-01-01T00:00:00Z'): DbxFile => ({
@@ -78,12 +78,24 @@ test('resumeBook: the volume in progress, else the first unread, else the first'
   expect(resumeBook(s, { [t1.id]: p(1, 1), [t2.id]: p(1, 1), [t3.id]: p(1, 1) })).toBe(t1)
 })
 
-test('heroPick: latest book in progress, else the newest series', () => {
-  const series = catalog(f('/Ebook/A/1.epub', '2025-01-01T00:00:00Z'), f('/Ebook/B/1.epub', '2026-01-01T00:00:00Z'))
+test('heroPick: latest book in progress, else a series at random at its first unread volume', () => {
+  const series = catalog(f('/Ebook/A/1.epub'), f('/Ebook/B/1.epub'), f('/Ebook/B/2.epub'))
   const a1 = series.find((s) => s.title === 'A')!.books[0]
-  expect(heroPick(series, { [a1.id]: p(0.3, 9) })).toEqual({ series: seriesOfBook(series, a1.id), book: a1 })
-  expect(heroPick(series, {})?.series.title).toBe('B')
-  expect(heroPick([], {})).toBeNull()
+  const [b1, b2] = series.find((s) => s.title === 'B')!.books
+  expect(heroPick(series, { [a1.id]: p(0.3, 9) }, 0)).toEqual({ series: seriesOfBook(series, a1.id), book: a1 })
+  expect(heroPick(series, {}, 0)?.series.title).toBe('A')
+  expect(heroPick(series, {}, 0.99)?.series.title).toBe('B')
+  expect(heroPick(series, { [b1.id]: p(1, 9) }, 0.99)?.book).toBe(b2)
+  expect(heroPick([], {}, 0.5)).toBeNull()
+})
+
+test('nextInSeries: the following volume, none after the last one', () => {
+  const series = catalog(f('/Ebook/S/T1.cbz'), f('/Ebook/S/T2.cbz'), f('/Ebook/Dune.epub'))
+  const [t1, t2] = series.find((s) => s.title === 'S')!.books
+  expect(nextInSeries(series, t1.id)).toBe(t2)
+  expect(nextInSeries(series, t2.id)).toBeUndefined()
+  expect(nextInSeries(series, series.find((s) => s.title === 'Dune')!.books[0].id)).toBeUndefined()
+  expect(nextInSeries(series, 'id:gone')).toBeUndefined()
 })
 
 test('readingHistory lists opened books newest first, without reset ones', () => {

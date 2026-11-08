@@ -10,7 +10,7 @@ import { AvatarDialog } from './components/AvatarDialog'
 import { ConfirmDialog, type Confirm } from './components/ConfirmDialog'
 import { PinSettings } from './components/PinDialogs'
 import { TopBar, type ProfileAction } from './components/TopBar'
-import { buildSeries, findSeries, seriesOfBook } from './library/catalog'
+import { buildSeries, findSeries, nextInSeries, seriesOfBook } from './library/catalog'
 import { allBooks, buildTree, type Book } from './library/library'
 import { listOffline, removeOffline, saveOffline } from './offline/offline'
 import { reloadIfUpdated } from './update'
@@ -331,7 +331,9 @@ export default function App() {
         <ProfilesScreen onPick={(p) => pickProfile(p.id)} onError={onError} />
       ) : readingBook ? (
         <ReaderScreen
+          key={readingBook.id}
           book={readingBook}
+          next={series ? nextInSeries(series, readingBook.id) : undefined}
           profileId={profileId}
           onBack={() => {
             const home = series && seriesOfBook(series, readingBook.id)

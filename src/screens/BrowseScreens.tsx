@@ -1,5 +1,6 @@
 import { Box, Button, chakra, Flex, Heading, Stack, Text } from '@chakra-ui/react'
 import { AnimatePresence, motion } from 'motion/react'
+import { useState } from 'react'
 import { BookCover } from '../components/BookCover'
 import { BookMenu } from '../components/BookMenu'
 import { LibrarySkeleton } from '../components/Loader'
@@ -22,6 +23,8 @@ const bookLabel = (series: Series[], b: Book) => {
 
 
 export function HomeScreen({ series, progress, offline, onReset, onToggleOffline, libraryName, onChangeFolder }: Data & { libraryName: string; onChangeFolder: () => void }) {
+  // With no book in progress, the poster shows a series picked at random, kept while the home screen stays.
+  const [random] = useState(Math.random)
   if (!series) return <LibrarySkeleton />
   if (!series.length) {
     return (
@@ -33,7 +36,7 @@ export function HomeScreen({ series, progress, offline, onReset, onToggleOffline
       </Box>
     )
   }
-  const hero = heroPick(series, progress)
+  const hero = heroPick(series, progress, random)
   const books = series.flatMap((s) => s.books)
   const label = (b: Book) => bookLabel(series, b)
   const card = (b: Book) => (
