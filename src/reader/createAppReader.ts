@@ -4,7 +4,7 @@ import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
 import { refitEnhancer } from '@prose-reader/enhancer-refit'
-import { concat, concatMap, defer, distinctUntilChanged, filter, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
+import { asyncScheduler, concat, concatMap, debounceTime, defer, distinctUntilChanged, EMPTY, filter, fromEvent, switchMap, throttleTime, from, ignoreElements, map, of, tap, type Observable } from 'rxjs'
 
 type Offset = { horizontalOffset: number; verticalOffset: number }
 type LaidOut = { endOffset: Offset }
@@ -53,6 +53,14 @@ const ONE_STRIP = `html body {
 // only, Safari on iPhone kills the tab past about 7 big pages) seen stay loaded.
 const KEPT_CHAPTERS = 20
 const KEPT_COMIC_PAGES = 4
+const RELOOK_DELAY = 200
+// Loading follows the scroll: what comes within NEAR screens of the screen is loaded at once, released past FAR.
+const NEAR = { chapters: 2, comics: 1 }
+const FAR = { chapters: 4, comics: 2 }
+
+// How many screens away from the screen an item is: 0 when on it.
+export const screensAway = (rect: { top: number; bottom: number }, height: number) =>
+  rect.bottom < 0 ? -rect.bottom / height : rect.top > height ? (rect.top - height) / height : 0
 
 // Holds the last `limit` items visited (hold returns the release), releasing the oldest beyond.
 export function recentlyVisited(limit: number, hold: (id: string) => () => void) {
@@ -82,6 +90,8 @@ export function recentlyVisited(limit: number, hold: (id: string) => () => void)
 // - an EPUB chapter shows its first page only (ONE_STRIP); openReader also marks the book scrolled-continuous,
 //   for prose-reader to size each chapter to its content.
 // - scrolling back reloads what was just read, prose-reader keeping one item on each side only.
+// - a fast scroll runs onto chapters never loaded: prose-reader loads one item on each side of where the scroll
+//   stopped, half a second after. Loading follows the scroll instead (NEAR).
 // ponytail: works around prose-reader 36; recheck on upgrade.
 export const scrollingFixes =
   <O, R extends Reader>(next: (options: O) => R) =>
@@ -100,7 +110,36 @@ export const scrollingFixes =
       const doc = documentOf(item.id)
       if (doc && reader.spineItemsManager.get(item.id)?.renditionLayout === 'reflowable') reader.utils.injectScopedCSS(doc, 'bookflix-strip', ONE_STRIP)
     })
+    // A chapter that loads grows and pushes the others: what then comes on screen may be a chapter never loaded,
+    // prose-reader looking at what to load only when the reader scrolls. A scroll event makes it look again.
+    const relook = reader.spineItemsObserver.itemStateChange$
+      .pipe(filter(({ isReady }) => isReady), debounceTime(RELOOK_DELAY))
+      .subscribe(() => reader.navigation.scrollNavigationController.value.element?.dispatchEvent(new Event('scroll')))
     const comics = reader.context.manifest?.renditionLayout === 'pre-paginated'
+    const [near, far] = comics ? [NEAR.comics, FAR.comics] : [NEAR.chapters, FAR.chapters]
+    const nearby = new Map<string, () => void>()
+    const follow = reader.navigation.scrollNavigationController
+      .watch('element')
+      .pipe(
+        switchMap((element) => (element ? fromEvent(element, 'scroll') : EMPTY)),
+        throttleTime(100, asyncScheduler, { leading: true, trailing: true }),
+      )
+      .subscribe(() => {
+        const height = reader.viewport.value.element.clientHeight
+        for (const item of reader.spineItemsManager.items) {
+          const id = item.item.id
+          const away = screensAway(item.containerElement.getBoundingClientRect(), height)
+          // Loaded at once: prose-reader's loader waits for the scroll to stop. The hold keeps it from unloading it.
+          if (away <= near && !nearby.has(id)) {
+            nearby.set(id, reader.keepSpineItemLoaded(id))
+            item.load()
+          }
+          if (away > far && nearby.has(id)) {
+            nearby.get(id)!()
+            nearby.delete(id)
+          }
+        }
+      })
     const kept = recentlyVisited(comics ? KEPT_COMIC_PAGES : KEPT_CHAPTERS, (id) => reader.keepSpineItemLoaded(id))
     const visits = reader.navigation.navigation$.subscribe(() => {
       const item = reader.spineItemsManager.get(reader.navigation.getNavigation().spineItem)
@@ -110,6 +149,9 @@ export const scrollingFixes =
       ...reader,
       destroy: () => {
         visits.unsubscribe()
+        relook.unsubscribe()
+        follow.unsubscribe()
+        nearby.forEach((release) => release())
         kept.releaseAll()
         removeOuter()
         reader.destroy()

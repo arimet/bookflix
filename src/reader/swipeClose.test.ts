@@ -1,6 +1,6 @@
 import { Subject } from 'rxjs'
 import { describe, expect, it, vi } from 'vitest'
-import { isAtLastPage, isClosingSwipe, recentlyVisited, turnOnSwipeUpToClose, upwardPull, type AppReader } from './createAppReader'
+import { isAtLastPage, isClosingSwipe, recentlyVisited, screensAway, turnOnSwipeUpToClose, upwardPull, type AppReader } from './createAppReader'
 
 describe('upwardPull', () => {
   it('follows a swipe that goes mostly up', () => {
@@ -97,5 +97,13 @@ describe('recentlyVisited', () => {
     expect(released).toEqual(['b'])
     kept.releaseAll()
     expect(released.sort()).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('screensAway', () => {
+  it('counts the screens between an item and an 800 px screen, 0 when on it', () => {
+    expect(screensAway({ top: -100, bottom: 300 }, 800)).toBe(0)
+    expect(screensAway({ top: 2400, bottom: 4000 }, 800)).toBe(2)
+    expect(screensAway({ top: -3000, bottom: -1600 }, 800)).toBe(2)
   })
 })

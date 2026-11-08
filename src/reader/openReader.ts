@@ -18,8 +18,11 @@ const PRELOAD = { numberOfAdjacentSpineItemToPreLoad: 1 }
 
 // The reader's options for a book: scroll reads it as one strip from top to bottom. A book that asks for
 // scrolling itself (an EPUB in scrolled-continuous flow) scrolls either way.
+// Scrolling, the pages show at once: prose-reader fades each one in over 0.8 s, which reads as a page loading.
 export const readerOptions = (flow: Flow) =>
-  ({ ...PRELOAD, pageTurnMode: flow === 'scroll' ? 'scrollable' : 'controlled' }) as const
+  flow === 'scroll'
+    ? ({ ...PRELOAD, pageTurnMode: 'scrollable', layoutLayerTransition: false } as const)
+    : ({ ...PRELOAD, pageTurnMode: 'controlled' } as const)
 
 // Scrolling down an EPUB: marked scrolled-continuous, prose-reader sizes each chapter to its content instead of
 // one screen (see scrollingFixes).
