@@ -1,37 +1,23 @@
-import { Box, Button, Flex, IconButton, Stack, Text } from '@chakra-ui/react'
-import { BookCover } from '../components/BookCover'
+import { Box } from '@chakra-ui/react'
 import { DebugLog, DEBUG } from '../components/DebugLog'
-import { Loader } from '../components/Loader'
-import { Shell } from '../components/PinDialogs'
+import { Loader, OpenFailed } from '../components/Loader'
+import { NextVolume } from '../components/NextVolume'
 import { ZoomPageBar } from '../components/ZoomPageBar'
 import { ReactReader, type ReactReaderSettings } from '@prose-reader/react-reader'
 import '@prose-reader/react-reader/index.css'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { LuPlay, LuX } from 'react-icons/lu'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
 import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnSideTaps, turnOnSwipeUpToClose, turnTowards, watchLastPage, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
-import { openReader } from '../reader/openReader'
-import { readHref } from '../routes'
+import { isComic, openReader } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookSetting, type BookSetting, type Direction, type Flow } from '../sync/books'
+import { columnWidth, themeBg, useLayout } from './readerLayout'
+import { ComicStrip } from './ComicStrip'
+import { ReaderSettings } from './ReaderSettings'
 import { positionRecorder } from '../sync/positionRecorder'
 import { deviceName, flushPending, localProgress, recordProgress } from '../sync/progress'
 
 const SETTINGS_KEY = 'bookflix.readerSettings'
-const LAYOUT_KEY = 'bookflix.readerLayout'
-
-// The page sits in a centred column of `width` rem; at FULL_WIDTH it takes the whole screen.
-// lineHeight 'publisher' keeps the book's own spacing.
-type ReaderTheme = 'night' | 'sepia' | 'bright'
-type Layout = { width: number; lineHeight: number | 'publisher'; theme: ReaderTheme }
-const DEFAULT_LAYOUT: Layout = { width: 52, lineHeight: 'publisher', theme: 'night' }
-const THEMES: { theme: ReaderTheme; label: string; bg: string }[] = [
-  { theme: 'bright', label: 'Clair', bg: '#ffffff' },
-  { theme: 'sepia', label: 'Sépia', bg: '#eaddc5' },
-  { theme: 'night', label: 'Sombre', bg: '#191717' },
-]
-const FULL_WIDTH = 100
-const columnWidth = (width: number) => (width >= FULL_WIDTH ? '100%' : `${width}rem`)
 const FLUSH_DELAY = 5000
 // prose-reader shows a zoom slider while zoomed in, with no setting to turn it off; pinching does the same.
 // ponytail: matches prose-reader's markup (the slider in a presence box right under the reader); recheck on upgrade.
@@ -48,7 +34,19 @@ const CLOSE_DURATION = 200
 // next: the following volume of the series, offered on the last page.
 type Props = { book: Book; next?: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void }
 
-export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) {
+// A comic read by scrolling down is shown by ComicStrip, prose-reader showing a page only once the scroll has
+// stopped for half a second; every other book by prose-reader. onReopen opens the book again from scratch, after
+// a change of direction or flow: the latest position is reread then.
+export function ReaderScreen(props: Props) {
+  const [opening, setOpening] = useState(0)
+  const onReopen = useCallback(() => setOpening((n) => n + 1), [])
+  const strip = isComic(props.book) && cachedBookSettings()[props.book.id]?.flow === 'scroll'
+  return strip
+    ? <ComicStrip key={`strip-${opening}`} {...props} onReopen={onReopen} />
+    : <BookReader key={`book-${opening}`} {...props} onReopen={onReopen} />
+}
+
+function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props & { onReopen: () => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const sheetRef = useRef<HTMLDivElement | null>(null) // what a swipe up moves
   const onBackRef = useRef(onBack)
@@ -65,18 +63,9 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
   const [flow, setFlow] = useState<{ flow: Flow; scrollOnly: boolean }>()
   const [failed, setFailed] = useState<string>() // the error, shown to tell what went wrong
   const [menuOpen, setMenuOpen] = useState(false)
-  // Bumped to reopen the book, e.g. after a direction or flow change; the latest position is reread then.
-  const [session, setSession] = useState(0)
   // One page at a time unless the reader picks two in the Layout menu.
   const [settings, setSettings] = useState<ReactReaderSettings>(() => ({ spreadMode: 'never', ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') }))
-  const [layout, setLayout] = useState<Layout>(() => ({ ...DEFAULT_LAYOUT, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') }))
-
-  const changeLayout = (changes: Partial<Layout>) =>
-    setLayout((old) => {
-      const next = { ...old, ...changes }
-      localStorage.setItem(LAYOUT_KEY, JSON.stringify(next))
-      return next
-    })
+  const [layout, changeLayout] = useLayout()
 
   useEffect(() => {
     reader?.settings.update({ lineHeight: layout.lineHeight })
@@ -192,32 +181,21 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
       setReader(undefined)
       cleanup()
     }
-  }, [bookId, rev, profileId, session, onError])
+  }, [bookId, rev, profileId, onError])
 
   const changeBook = async (changes: BookSetting) => {
     try {
       await setBookSetting(book.id, changes)
-      setMenuOpen(false)
-      setSession((s) => s + 1)
+      onReopen()
     } catch (e) {
       onError(e)
     }
   }
 
-  if (failed !== undefined) {
-    return (
-      <Box minH="100dvh" display="grid" placeItems="center" p="6">
-        <Stack gap="4" align="center" textAlign="center">
-          <Text>Impossible d'ouvrir ce livre.</Text>
-          <Text fontSize="sm" color="muted">{failed}</Text>
-          <Button onClick={onBack}>Retour</Button>
-        </Stack>
-      </Box>
-    )
-  }
+  if (failed !== undefined) return <OpenFailed message={failed} onBack={onBack} />
 
   return (
-    <Box position="fixed" inset="0" bg={THEMES.find((t) => t.theme === layout.theme)!.bg} css={{ ...HIDE_ZOOM_SLIDER, ...ABOVE_HOME_BAR }}>
+    <Box position="fixed" inset="0" bg={themeBg(layout.theme)} css={{ ...HIDE_ZOOM_SLIDER, ...ABOVE_HOME_BAR }}>
       {/* Installed on iPhone the app draws under the status bar: keep the reader and its header out of it.
           At the bottom the page goes down to the edge, as in Photos (ABOVE_HOME_BAR). */}
       <Box ref={sheetRef} position="absolute" top="env(safe-area-inset-top)" bottom="0"
@@ -244,7 +222,7 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
           </Box>
           {/* Opaque while the book opens: the page frames are laid out, then painted, in several steps. */}
           <Box position="absolute" inset="0" display="grid" placeItems="center" pointerEvents="none"
-            bg={THEMES.find((t) => t.theme === layout.theme)!.bg} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
+            bg={themeBg(layout.theme)} opacity={reader && drawn === reader ? 0 : 1} transition="opacity 0.2s">
             <Loader />
           </Box>
           {/* The page number is in the menu: no floating percentage over the page. */}
@@ -263,94 +241,3 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
   )
 }
 
-// On the last page of a volume, the next one of the series. Replaces the book in the history: back still
-// leads to the series.
-function NextVolume({ book, onClose }: { book: Book; onClose: () => void }) {
-  return (
-    <Flex position="absolute" insetX="4" bottom="calc(1rem + env(safe-area-inset-bottom))" mx="auto" maxW="sm" p="3" gap="3"
-      align="center" bg="bg.panel" rounded="lg" shadow="lg" animationName="slide-from-bottom, fade-in" animationDuration="moderate">
-      <Box w="10" flexShrink={0}><BookCover book={book} small /></Box>
-      <Stack gap="0" flex="1" minW="0">
-        <Text fontSize="xs" color="fg.muted">Tome suivant</Text>
-        <Text fontSize="sm" fontWeight="semibold" lineClamp={2}>{book.title}</Text>
-      </Stack>
-      <Button size="sm" bg="white" color="black" fontWeight="bold" _hover={{ bg: 'whiteAlpha.800' }}
-        onClick={() => location.replace(readHref(book))}>
-        <LuPlay fill="currentColor" /> Lire
-      </Button>
-      <IconButton aria-label="Fermer" size="sm" variant="ghost" onClick={onClose}><LuX /></IconButton>
-    </Flex>
-  )
-}
-
-type SettingsProps = {
-  open: boolean
-  onClose: () => void
-  layout: Layout
-  onLayout: (changes: Partial<Layout>) => void
-  direction?: Direction
-  flow?: { flow: Flow; scrollOnly: boolean }
-  onBook: (changes: BookSetting) => void // reopens the book
-}
-
-export function ReaderSettings({ open, onClose, layout, onLayout, direction, flow, onBook }: SettingsProps) {
-  return (
-    <Shell title="Réglages" open={open} onClose={onClose} size="md">
-      <Stack gap="2" mb="6">
-        <Text fontWeight="semibold">Thème</Text>
-        <Flex gap="2">
-          {THEMES.map((t) => (
-            <Button key={t.theme} flex="1" bg={t.bg} color={t.theme === 'night' ? 'white' : 'black'}
-              outline={layout.theme === t.theme ? '2px solid #e50914' : 'none'} onClick={() => onLayout({ theme: t.theme })}>
-              {t.label}
-            </Button>
-          ))}
-        </Flex>
-      </Stack>
-      <Stack gap="2" mb="6">
-        <Flex justify="space-between">
-          <Text fontWeight="semibold">Largeur</Text>
-          <Text color="fg.muted">{layout.width >= FULL_WIDTH ? 'Pleine' : `${layout.width} rem`}</Text>
-        </Flex>
-        <input type="range" min={28} max={FULL_WIDTH} step={2} value={layout.width} aria-label="Largeur"
-          onChange={(e) => onLayout({ width: Number(e.target.value) })} />
-      </Stack>
-      <Stack gap="2" mb="6">
-        <Flex justify="space-between" align="center">
-          <Text fontWeight="semibold">Hauteur de ligne</Text>
-          <Text color="fg.muted">{layout.lineHeight === 'publisher' ? 'Celle du livre' : layout.lineHeight.toFixed(1)}</Text>
-        </Flex>
-        <input type="range" min={1} max={2.4} step={0.1} aria-label="Hauteur de ligne"
-          value={layout.lineHeight === 'publisher' ? 1.5 : layout.lineHeight}
-          onChange={(e) => onLayout({ lineHeight: Number(e.target.value) })} />
-        <Button size="xs" variant="ghost" alignSelf="end" disabled={layout.lineHeight === 'publisher'}
-          onClick={() => onLayout({ lineHeight: 'publisher' })}>
-          Revenir à celle du livre
-        </Button>
-      </Stack>
-      <Stack gap="2" mb="6">
-        <Text fontWeight="semibold">Défilement</Text>
-        <Flex gap="2">
-          <Button flex="1" variant={flow?.flow === 'pages' ? 'solid' : 'outline'} disabled={!flow || flow.scrollOnly}
-            onClick={() => flow?.flow !== 'pages' && onBook({ flow: 'pages' })}>
-            Page par page
-          </Button>
-          <Button flex="1" variant={flow?.flow === 'scroll' ? 'solid' : 'outline'} disabled={!flow}
-            onClick={() => flow?.flow !== 'scroll' && onBook({ flow: 'scroll' })}>
-            Vers le bas
-          </Button>
-        </Flex>
-        {flow?.scrollOnly && <Text fontSize="sm" color="fg.muted">Ce livre se lit forcément en défilant.</Text>}
-      </Stack>
-      <Stack gap="2">
-        <Text fontWeight="semibold">Sens de lecture</Text>
-        <Button variant={direction === 'ltr' ? 'solid' : 'outline'} onClick={() => onBook({ direction: 'ltr' })}>
-          Gauche → droite (livre)
-        </Button>
-        <Button variant={direction === 'rtl' ? 'solid' : 'outline'} onClick={() => onBook({ direction: 'rtl' })}>
-          Droite → gauche (manga)
-        </Button>
-      </Stack>
-    </Shell>
-  )
-}

@@ -4,7 +4,7 @@ import { getBookBlob, localBookBlob } from '../offline/offline'
 import { openArchive, openBook } from './openBook'
 import { createAppReader } from './createAppReader'
 import { openEpub } from './openEpub'
-import { openReader, scrolledManifest } from './openReader'
+import { openReader } from './openReader'
 import { createLocalArchive, createRemoteArchive } from './remoteZip'
 
 vi.mock('../offline/offline', () => ({ localBookBlob: vi.fn(), getBookBlob: vi.fn() }))
@@ -76,12 +76,4 @@ test('an EPUB read by scrolling down is laid out as one strip per chapter; one t
   expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ manifest }))
   vi.mocked(openEpub).mockResolvedValue({ manifest: { ...manifest, renditionFlow: 'scrolled-continuous' }, close: vi.fn() } as never)
   expect((await openReader(book('epub'), 'ltr', undefined, 'pages')).scrollOnly).toBe(true)
-})
-
-test('a comic read by scrolling down lays its pages out one under the other, each the height of its image', () => {
-  const manifest = { renditionLayout: 'pre-paginated', spineItems: [{ id: 'p1', mediaType: 'image/jpeg', renditionLayout: 'pre-paginated' }] } as never
-  expect(scrolledManifest(manifest)).toEqual({
-    renditionLayout: 'reflowable', renditionFlow: 'scrolled-continuous',
-    spineItems: [{ id: 'p1', mediaType: 'image/jpeg', renditionLayout: 'reflowable', renditionFlow: 'scrolled-continuous' }],
-  })
 })
