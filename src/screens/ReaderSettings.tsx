@@ -1,4 +1,5 @@
 import { Button, Flex, Stack, Text } from '@chakra-ui/react'
+import { LuRefreshCw } from 'react-icons/lu'
 import { Shell } from '../components/PinDialogs'
 import type { BookSetting, Direction, Flow } from '../sync/books'
 import { FULL_WIDTH, THEMES, type Layout } from './readerLayout'
@@ -12,9 +13,10 @@ type SettingsProps = {
   flow?: { flow: Flow; scrollOnly: boolean }
   onBook: (changes: BookSetting) => void // reopens the book
   text?: boolean // a book with text: its line height can be set
+  onReload: () => void // opens the book again where it is, for a page that did not show
 }
 
-export function ReaderSettings({ open, onClose, layout, onLayout, direction, flow, onBook, text = true }: SettingsProps) {
+export function ReaderSettings({ open, onClose, layout, onLayout, direction, flow, onBook, text = true, onReload }: SettingsProps) {
   return (
     <Shell title="Réglages" open={open} onClose={onClose} size="md">
       <Stack gap="2" mb="6">
@@ -71,6 +73,10 @@ export function ReaderSettings({ open, onClose, layout, onLayout, direction, flo
         <Button variant={direction === 'rtl' ? 'solid' : 'outline'} onClick={() => onBook({ direction: 'rtl' })}>
           Droite → gauche (manga)
         </Button>
+      </Stack>
+      <Stack gap="2" mt="6">
+        <Text fontWeight="semibold">Un souci d'affichage ?</Text>
+        <Button variant="outline" onClick={onReload}><LuRefreshCw /> Recharger la page</Button>
       </Stack>
     </Shell>
   )

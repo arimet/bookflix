@@ -8,7 +8,7 @@ import '@prose-reader/react-reader/index.css'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
-import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnSideTaps, turnOnSwipeUpToClose, turnTowards, watchLastPage, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
+import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnDoubleTapUnzoom, turnOnSideTaps, turnOnSwipeUpToClose, turnTowards, watchLastPage, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { isComic, openReader } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, loadBookSettings, setBookSetting, type BookSetting, type Direction, type Flow } from '../sync/books'
 import { columnWidth, themeBg, useLayout } from './readerLayout'
@@ -80,6 +80,7 @@ function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props 
     const marks = markSpineItemOnScreen(reader)
     const ready = whenPageOnScreenReady(reader, () => setDrawn(reader))
     const unregisterTaps = turnOnSideTaps(reader)
+    const unregisterDoubleTaps = turnOnDoubleTapUnzoom(reader)
     const pulls = turnOnEdgePulls(reader)
     const end = watchLastPage(reader, setAtEnd)
     const style = (transform: string, opacity: string, transition: string) => {
@@ -103,6 +104,7 @@ function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props 
       marks.unsubscribe()
       ready.unsubscribe()
       unregisterTaps()
+      unregisterDoubleTaps()
     }
   }, [reader])
 
@@ -236,7 +238,7 @@ function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props 
       </Box>
       {DEBUG && <DebugLog reader={reader} />}
       <ReaderSettings open={menuOpen} onClose={() => setMenuOpen(false)} layout={layout} onLayout={changeLayout}
-        direction={direction} flow={flow} onBook={changeBook} />
+        direction={direction} flow={flow} onBook={changeBook} onReload={onReopen} />
     </Box>
   )
 }

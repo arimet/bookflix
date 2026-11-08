@@ -1,5 +1,6 @@
 import { cbzEnhancer } from '@prose-reader/cbz'
 import { createReader, type Reader } from '@prose-reader/core'
+import { isDoubleTap, isPageZoomed, resetPageZoom } from './pageZoom'
 import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
@@ -216,6 +217,26 @@ export function turnOnSideTaps(reader: AppReader) {
         const side = 'x' in event.event ? tapSide(event.event.x, innerWidth) : null
         if (!side || zoomed || reader.settings.values.computedPageTurnMode === 'scrollable') return true
         turnTowards(reader, side)
+        return false
+      }),
+    ),
+  )
+}
+
+// A double tap on a zoomed page puts the zoom back: prose-reader's (page by page) or the browser's (scrolling).
+// The second tap does nothing else.
+export function turnOnDoubleTapUnzoom(reader: AppReader) {
+  let last: { time: number; x: number; y: number } | undefined
+  return reader.gestures.hooks.register('beforeTapGesture', ({ event$ }) =>
+    event$.pipe(
+      map(({ event }) => {
+        const tap = { time: Date.now(), x: 'x' in event.event ? event.event.x : 0, y: 'y' in event.event ? event.event.y : 0 }
+        const double = isDoubleTap(last, tap)
+        last = double ? undefined : tap
+        if (!double) return true
+        if (isZoomedIn(reader.zoom.state)) reader.zoom.exit({ animate: true })
+        else if (isPageZoomed()) resetPageZoom()
+        else return true
         return false
       }),
     ),
