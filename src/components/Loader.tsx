@@ -39,3 +39,16 @@ export function RetryScreen({ message, onRetry }: { message: string; onRetry: ()
     </Box>
   )
 }
+
+// A book that could not be opened: why, and the way back.
+export function OpenFailed({ message, onBack }: { message: string; onBack: () => void }) {
+  return (
+    <Box minH="100dvh" display="grid" placeItems="center" p="6">
+      <Stack gap="4" align="center" textAlign="center">
+        <Text>Impossible d'ouvrir ce livre.</Text>
+        <Text fontSize="sm" color="muted">{message}</Text>
+        <Button onClick={onBack}>Retour</Button>
+      </Stack>
+    </Box>
+  )
+}
