@@ -148,7 +148,7 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
       loadBookSettings().catch(() => {}) // refreshes the cache for next time
       const dir = bookSettings[book.id]?.direction ?? defaultDirection(book.format)
       const saved = progress[book.id]
-      const { reader: instance, close } = await openReader(book, dir, saved?.cfi ? { type: 'cfi', value: saved.cfi } : undefined,
+      const { reader: instance, close, scrollOnly } = await openReader(book, dir, saved?.cfi ? { type: 'cfi', value: saved.cfi } : undefined,
         bookSettings[book.id]?.flow)
       if (cancelled || !containerRef.current) {
         instance.destroy()
@@ -168,7 +168,7 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
       setDirection(dir)
       setFlow({
         flow: instance.settings.values.computedPageTurnMode === 'scrollable' ? 'scroll' : 'pages',
-        scrollOnly: !instance.features.value.supportedPageTurnMode.includes('controlled'),
+        scrollOnly,
       })
       setReader(instance)
 

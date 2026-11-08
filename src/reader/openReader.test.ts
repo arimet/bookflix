@@ -3,6 +3,7 @@ import type { Book } from '../library/library'
 import { getBookBlob, localBookBlob } from '../offline/offline'
 import { openArchive, openBook } from './openBook'
 import { createAppReader } from './createAppReader'
+import { openEpub } from './openEpub'
 import { openReader } from './openReader'
 import { createLocalArchive, createRemoteArchive } from './remoteZip'
 
@@ -60,4 +61,19 @@ test('a book opens page by page unless set to scroll', async () => {
   expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ pageTurnMode: 'controlled' }))
   await openReader(book('cbz'), 'rtl', undefined, 'scroll')
   expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ pageTurnMode: 'scrollable' }))
+})
+
+test('an EPUB read by scrolling down is laid out as one strip per chapter; one that asks for it cannot be read page by page', async () => {
+  vi.mocked(localBookBlob).mockResolvedValue(new Blob(['x']))
+  const manifest = { renditionFlow: 'auto', spineItems: [{ id: 'c1' }, { id: 'c2', renditionFlow: 'paginated' }] }
+  vi.mocked(openEpub).mockResolvedValue({ manifest, close: vi.fn() } as never)
+  expect((await openReader(book('epub'), 'ltr', undefined, 'scroll')).scrollOnly).toBe(false)
+  expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ manifest: {
+    renditionFlow: 'scrolled-continuous',
+    spineItems: [{ id: 'c1', renditionFlow: 'scrolled-continuous' }, { id: 'c2', renditionFlow: 'scrolled-continuous' }],
+  } }))
+  await openReader(book('epub'), 'ltr', undefined, 'pages')
+  expect(createAppReader).toHaveBeenLastCalledWith(expect.objectContaining({ manifest }))
+  vi.mocked(openEpub).mockResolvedValue({ manifest: { ...manifest, renditionFlow: 'scrolled-continuous' }, close: vi.fn() } as never)
+  expect((await openReader(book('epub'), 'ltr', undefined, 'pages')).scrollOnly).toBe(true)
 })

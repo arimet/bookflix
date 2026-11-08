@@ -1,5 +1,5 @@
 import { cbzEnhancer } from '@prose-reader/cbz'
-import { createReader } from '@prose-reader/core'
+import { createReader, type Reader } from '@prose-reader/core'
 import { galleryEnhancer } from '@prose-reader/enhancer-gallery'
 import { gesturesEnhancer } from '@prose-reader/enhancer-gestures'
 import { pdfEnhancer } from '@prose-reader/enhancer-pdf'
@@ -40,30 +40,34 @@ export const flatLayout =
   }
 
 const PAN_Y = '{ touch-action: pan-y !important }'
+// Undoes the columns prose-reader lays a chapter out in, even when scrolling (a page beside the other, all but
+// the first out of sight): the chapter runs down as one strip, which prose-reader then sizes the frame to.
+const ONE_STRIP = 'html body { height: auto !important; column-width: auto !important; column-count: auto !important; overflow-y: visible !important }'
 
-type TouchScrollable = {
-  id: string
-  settings: { values: { computedPageTurnMode: string } }
-  hookManager: { register: (name: 'item.onDocumentLoad', run: (params: { documentContainer: HTMLElement }) => Promise<void>) => unknown }
-  utils: { injectScopedCSS: (doc: Document, scope: string, css: string) => () => void }
-  destroy: () => void
-}
-
-// A book read by scrolling down could not be scrolled with a finger: the gestures put touch-action: none on
-// the whole reader, and the CSS of comic pages, meant to let touches through in that mode, blocks them on
-// every element of the page (`:not(html.…-touch-enabled) body` matches any body). In that mode vertical
-// pans are left to the browser, around the pages and on them; pinches and taps stay with the gestures.
+// Scrolling down, as prose-reader 36 does it, does not work on iPhone:
+// - a finger cannot scroll: the gestures put touch-action: none on the whole reader, and the CSS of comic pages,
+//   meant to let touches through in that mode, blocks them on every element (`:not(html.…-touch-enabled) body`
+//   matches any body). Vertical pans are left to the browser, around the pages and on them; pinches and taps
+//   stay with the gestures.
+// - an EPUB chapter shows its first page only (ONE_STRIP); openReader also marks the book scrolled-continuous,
+//   for prose-reader to size each chapter to its content.
 // ponytail: works around prose-reader 36; recheck on upgrade.
-export const touchScrolling =
-  <O, R extends TouchScrollable>(next: (options: O) => R) =>
+export const scrollingFixes =
+  <O, R extends Reader>(next: (options: O) => R) =>
   (options: O) => {
     const reader = next(options)
     if (reader.settings.values.computedPageTurnMode !== 'scrollable') return reader
     const container = `[data-prose-reader-container="${reader.id}"]`
-    const removeOuter = reader.utils.injectScopedCSS(document, 'bookflix-touch-scrolling', `${container}, ${container} * ${PAN_Y}`)
-    reader.hookManager.register('item.onDocumentLoad', async ({ documentContainer }) => {
-      const doc = 'contentDocument' in documentContainer ? (documentContainer as HTMLIFrameElement).contentDocument : null
-      if (doc) reader.utils.injectScopedCSS(doc, 'bookflix-touch-scrolling', `* ${PAN_Y}`)
+    const removeOuter = reader.utils.injectScopedCSS(document, 'bookflix-scrolling', `${container}, ${container} * ${PAN_Y}`)
+    const documentOf = (itemId: string) => reader.spineItemsManager.get(itemId)?.renderer.getDocumentFrame()?.contentDocument
+    reader.hookManager.register('item.onDocumentLoad', async ({ itemId }) => {
+      const doc = documentOf(itemId)
+      if (doc) reader.utils.injectScopedCSS(doc, 'bookflix-touch', `* ${PAN_Y}`)
+    })
+    // Before each layout: prose-reader sets the columns again, then measures the chapter.
+    reader.hookManager.register('item.onBeforeLayout', ({ item }) => {
+      const doc = documentOf(item.id)
+      if (doc && reader.spineItemsManager.get(item.id)?.renditionLayout === 'reflowable') reader.utils.injectScopedCSS(doc, 'bookflix-strip', ONE_STRIP)
     })
     return {
       ...reader,
@@ -76,8 +80,8 @@ export const touchScrolling =
 
 // Same order as the prose-reader demo, minus annotations, search and audio (out of scope).
 // pdfEnhancer replaces getResource for every item, so it is only applied to PDF books.
-export const createAppReader = touchScrolling(refitEnhancer(galleryEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader))))))
-export const createPdfReader = touchScrolling(refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader)))))))
+export const createAppReader = scrollingFixes(refitEnhancer(galleryEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader))))))
+export const createPdfReader = scrollingFixes(refitEnhancer(galleryEnhancer(pdfEnhancer(gesturesEnhancer(cbzEnhancer(flatLayout(createReader)))))))
 
 export type AppReader = ReturnType<typeof createAppReader>
 
