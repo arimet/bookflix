@@ -13,7 +13,7 @@ import type { Book } from '../library/library'
 import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnSideTaps, turnOnSwipeUpToClose, turnTowards, watchLastPage, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { openReader } from '../reader/openReader'
 import { readHref } from '../routes'
-import { cachedBookSettings, defaultDirection, loadBookSettings, setBookDirection, type Direction } from '../sync/books'
+import { cachedBookSettings, defaultDirection, loadBookSettings, setBookSetting, type BookSetting, type Direction, type Flow } from '../sync/books'
 import { positionRecorder } from '../sync/positionRecorder'
 import { deviceName, flushPending, localProgress, recordProgress } from '../sync/progress'
 
@@ -61,9 +61,11 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
   // The reader whose first page is drawn; our loader covers it until then.
   const [drawn, setDrawn] = useState<AppReader>()
   const [direction, setDirection] = useState<Direction>()
+  // How the book is read, as the reader opened it; scrollOnly for a book that asks for scrolling itself.
+  const [flow, setFlow] = useState<{ flow: Flow; scrollOnly: boolean }>()
   const [failed, setFailed] = useState<string>() // the error, shown to tell what went wrong
   const [menuOpen, setMenuOpen] = useState(false)
-  // Bumped to reopen the book, e.g. after a direction change; the latest position is reread then.
+  // Bumped to reopen the book, e.g. after a direction or flow change; the latest position is reread then.
   const [session, setSession] = useState(0)
   // One page at a time unless the reader picks two in the Layout menu.
   const [settings, setSettings] = useState<ReactReaderSettings>(() => ({ spreadMode: 'never', ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') }))
@@ -146,7 +148,8 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
       loadBookSettings().catch(() => {}) // refreshes the cache for next time
       const dir = bookSettings[book.id]?.direction ?? defaultDirection(book.format)
       const saved = progress[book.id]
-      const { reader: instance, close } = await openReader(book, dir, saved?.cfi ? { type: 'cfi', value: saved.cfi } : undefined)
+      const { reader: instance, close } = await openReader(book, dir, saved?.cfi ? { type: 'cfi', value: saved.cfi } : undefined,
+        bookSettings[book.id]?.flow)
       if (cancelled || !containerRef.current) {
         instance.destroy()
         return close()
@@ -163,6 +166,10 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
       })
       document.addEventListener('visibilitychange', onVisibility)
       setDirection(dir)
+      setFlow({
+        flow: instance.settings.values.computedPageTurnMode === 'scrollable' ? 'scroll' : 'pages',
+        scrollOnly: !instance.features.value.supportedPageTurnMode.includes('controlled'),
+      })
       setReader(instance)
 
       cleanup = () => {
@@ -187,9 +194,9 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
     }
   }, [bookId, rev, profileId, session, onError])
 
-  const changeDirection = async (next: Direction) => {
+  const changeBook = async (changes: BookSetting) => {
     try {
-      await setBookDirection(book.id, next)
+      await setBookSetting(book.id, changes)
       setMenuOpen(false)
       setSession((s) => s + 1)
     } catch (e) {
@@ -249,7 +256,7 @@ export function ReaderScreen({ book, next, profileId, onBack, onError }: Props) 
       </Box>
       {DEBUG && <DebugLog reader={reader} />}
       <ReaderSettings open={menuOpen} onClose={() => setMenuOpen(false)} layout={layout} onLayout={changeLayout}
-        direction={direction} onDirection={changeDirection} />
+        direction={direction} flow={flow} onBook={changeBook} />
     </Box>
   )
 }
@@ -280,10 +287,11 @@ type SettingsProps = {
   layout: Layout
   onLayout: (changes: Partial<Layout>) => void
   direction?: Direction
-  onDirection: (next: Direction) => void
+  flow?: { flow: Flow; scrollOnly: boolean }
+  onBook: (changes: BookSetting) => void // reopens the book
 }
 
-export function ReaderSettings({ open, onClose, layout, onLayout, direction, onDirection }: SettingsProps) {
+export function ReaderSettings({ open, onClose, layout, onLayout, direction, flow, onBook }: SettingsProps) {
   return (
     <Shell title="Réglages" open={open} onClose={onClose} size="md">
       <Stack gap="2" mb="6">
@@ -318,12 +326,26 @@ export function ReaderSettings({ open, onClose, layout, onLayout, direction, onD
           Revenir à celle du livre
         </Button>
       </Stack>
+      <Stack gap="2" mb="6">
+        <Text fontWeight="semibold">Défilement</Text>
+        <Flex gap="2">
+          <Button flex="1" variant={flow?.flow === 'pages' ? 'solid' : 'outline'} disabled={!flow || flow.scrollOnly}
+            onClick={() => flow?.flow !== 'pages' && onBook({ flow: 'pages' })}>
+            Page par page
+          </Button>
+          <Button flex="1" variant={flow?.flow === 'scroll' ? 'solid' : 'outline'} disabled={!flow}
+            onClick={() => flow?.flow !== 'scroll' && onBook({ flow: 'scroll' })}>
+            Vers le bas
+          </Button>
+        </Flex>
+        {flow?.scrollOnly && <Text fontSize="sm" color="fg.muted">Ce livre se lit forcément en défilant.</Text>}
+      </Stack>
       <Stack gap="2">
         <Text fontWeight="semibold">Sens de lecture</Text>
-        <Button variant={direction === 'ltr' ? 'solid' : 'outline'} onClick={() => onDirection('ltr')}>
+        <Button variant={direction === 'ltr' ? 'solid' : 'outline'} onClick={() => onBook({ direction: 'ltr' })}>
           Gauche → droite (livre)
         </Button>
-        <Button variant={direction === 'rtl' ? 'solid' : 'outline'} onClick={() => onDirection('rtl')}>
+        <Button variant={direction === 'rtl' ? 'solid' : 'outline'} onClick={() => onBook({ direction: 'rtl' })}>
           Droite → gauche (manga)
         </Button>
       </Stack>

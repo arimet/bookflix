@@ -2,7 +2,10 @@ import { readJson, writeJson } from '../dropbox/api'
 import type { Format } from '../library/library'
 
 export type Direction = 'ltr' | 'rtl'
-export type BookSettings = Record<string, { direction: Direction }>
+// pages: turned one at a time, sideways; scroll: one long strip read from top to bottom.
+export type Flow = 'pages' | 'scroll'
+export type BookSetting = { direction?: Direction; flow?: Flow }
+export type BookSettings = Record<string, BookSetting>
 
 const PATH = '/books.json'
 
@@ -21,9 +24,12 @@ export async function loadBookSettings(): Promise<BookSettings> {
   }
 }
 
-export async function setBookDirection(bookId: string, direction: Direction): Promise<void> {
-  const settings = (await readJson<BookSettings>(PATH)) ?? {}
-  settings[bookId] = { direction }
+// Changing one setting of a book keeps its others.
+export const withBookSetting = (settings: BookSettings, bookId: string, changes: BookSetting): BookSettings =>
+  ({ ...settings, [bookId]: { ...settings[bookId], ...changes } })
+
+export async function setBookSetting(bookId: string, changes: BookSetting): Promise<void> {
+  const settings = withBookSetting((await readJson<BookSettings>(PATH)) ?? {}, bookId, changes)
   await writeJson(PATH, settings)
   localStorage.setItem('bookflix.books', JSON.stringify(settings))
 }
