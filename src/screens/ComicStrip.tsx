@@ -7,12 +7,13 @@ import { NextVolume } from '../components/NextVolume'
 import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
 import { pageAt, pageCfi, pageOfCfi, stripPercent } from '../reader/comicStrip'
-import { isDoubleTap, isPageZoomed, resetPageZoom } from '../reader/pageZoom'
+import { isDoubleTap } from '../reader/pageZoom'
 import { openComic } from '../reader/openReader'
 import { cachedBookSettings, defaultDirection, setBookSetting, type BookSetting, type Direction } from '../sync/books'
 import { deviceName, flushPending, localProgress, recordProgress } from '../sync/progress'
 import { columnWidth, themeBg, useLayout } from './readerLayout'
 import { ReaderSettings } from './ReaderSettings'
+import { useStripZoom } from './useStripZoom'
 
 // Pages are fetched when they come within AHEAD of the screen, and let go past BEHIND: a comic page is a big image.
 const AHEAD = '250%'
@@ -39,7 +40,8 @@ const imageRatio = (url: string) =>
 type Props = { book: Book; next?: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void; onReopen: () => void }
 
 // A comic read by scrolling down: its pages one under the other, each the width of the column and the height of its
-// image, in a plain scrolling box. The browser scrolls and zooms; pages are fetched ahead as the scroll goes.
+// image, in a plain scrolling box. The browser scrolls, the strip zooms as on iPhone (useStripZoom); pages are
+// fetched ahead as the scroll goes.
 export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }: Props) {
   const [layout, changeLayout] = useLayout()
   const [comic, setComic] = useState<Comic>()
@@ -50,8 +52,9 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [nextDismissed, setNextDismissed] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const { scale, toggleZoom } = useStripZoom(scrollerRef, stripRef)
   const pageEls = useRef<HTMLDivElement[]>([])
   const ratios = useRef<Record<number, number>>({}) // width / height of the pages seen
   const urlsRef = useRef<Record<number, string>>({}) // the same as urls, read at once
@@ -155,6 +158,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
   }, [comic])
 
   // A page seen for the first time takes the shape of its image; one above the screen keeps what is on screen in place.
+  // Page boxes are measured unzoomed, the scroll is zoomed.
   const fit = useCallback((index: number, image: HTMLImageElement) => {
     const box = pageEls.current[index]
     const scroller = scrollerRef.current
@@ -163,8 +167,8 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
     const before = box.offsetHeight
     ratios.current[index] = ratio
     box.style.aspectRatio = String(ratio)
-    if (box.offsetTop < scroller.scrollTop) scroller.scrollTop += box.offsetHeight - before
-  }, [])
+    if (box.offsetTop * scale.current < scroller.scrollTop) scroller.scrollTop += (box.offsetHeight - before) * scale.current
+  }, [scale])
 
   // The page at the top third of the screen is the one being read; looked at once per frame at most.
   const frame = useRef(0)
@@ -175,10 +179,10 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
       const scroller = scrollerRef.current
       if (!scroller) return
       const tops = pageEls.current.map((element) => element.offsetTop)
-      setPage(pageAt(tops, scroller.scrollTop + scroller.clientHeight / 3))
+      setPage(pageAt(tops, (scroller.scrollTop + scroller.clientHeight / 3) / scale.current))
       setAtEnd(scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4)
     })
-  }, [])
+  }, [scale])
   useEffect(() => () => cancelAnimationFrame(frame.current), [])
 
   // Records where the reader is, as prose-reader would; the position the book opened at is not reading.
@@ -209,14 +213,14 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
     }
   }, [profileId])
 
-  // A tap shows or hides the menu. A double tap on a zoomed page puts the zoom back too, the menu left as it was
-  // before. touchAction keeps the browser from zooming on a double tap itself.
+  // A tap shows or hides the menu. A double tap zooms in on the point tapped, or back out, the menu left as it was.
   const lastTap = useRef<{ time: number; x: number; y: number }>(undefined)
   const onTap = (event: React.MouseEvent) => {
     const tap = { time: Date.now(), x: event.clientX, y: event.clientY }
     const double = isDoubleTap(lastTap.current, tap)
     lastTap.current = double ? undefined : tap
-    if (double && isPageZoomed()) resetPageZoom(rootRef.current)
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (double) toggleZoom({ x: tap.x - rect.left, y: tap.y - rect.top })
     setMenuOpen((open) => !open) // on a double tap, undoes the first tap's
   }
 
@@ -233,14 +237,16 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
 
   const bg = themeBg(layout.theme)
   return (
-    <Box ref={rootRef} position="fixed" inset="0" bg={bg}>
+    <Box position="fixed" inset="0" bg={bg} touchAction="pan-x pan-y">
       <Box ref={scrollerRef} position="absolute" top="env(safe-area-inset-top)" bottom="0" left="0" right="0"
-        overflowY="auto" overflowX="hidden" overflowAnchor="none" touchAction="pan-x pan-y pinch-zoom" onScroll={onScroll} onClick={onTap}>
+        overflow="auto" overflowAnchor="none" touchAction="pan-x pan-y" onScroll={onScroll} onClick={onTap}>
+        <Box ref={stripRef} transformOrigin="0 0">
         <Box maxW={columnWidth(layout.width)} mx="auto" pb="env(safe-area-inset-bottom)">
           {comic?.pages.map((p, index) => (
             <StripPage key={p.id} index={index} url={urls[index]} ratio={ratios.current[index] ?? comic.ratio} onFit={fit}
               register={(element) => { if (element) pageEls.current[index] = element }} />
           ))}
+        </Box>
         </Box>
       </Box>
       {!comic && <Box position="absolute" inset="0" display="grid" placeItems="center"><Loader /></Box>}
