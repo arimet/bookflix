@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { isAtLastPage, isClosingSwipe, upwardPull } from './createAppReader'
+import { Subject } from 'rxjs'
+import { describe, expect, it, vi } from 'vitest'
+import { isAtLastPage, isClosingSwipe, turnOnSwipeUpToClose, upwardPull, type AppReader } from './createAppReader'
 
 describe('upwardPull', () => {
   it('follows a swipe that goes mostly up', () => {
@@ -33,5 +34,52 @@ describe('isAtLastPage', () => {
     expect(isAtLastPage(edge(8, 0, 1), 10)).toBe(false)
     expect(isAtLastPage(edge(2, 10, 12), 3)).toBe(false)
     expect(isAtLastPage({ spineItemIndex: undefined, pageIndexInSpineItem: undefined, numberOfPagesInSpineItem: 0 }, 0)).toBe(false)
+  })
+})
+
+describe('turnOnSwipeUpToClose', () => {
+  type Mode = { computedPageTurnMode: 'controlled' | 'scrollable'; computedPageTurnDirection: 'horizontal' | 'vertical' }
+  // Just what the swipe reads of a reader: its pans, its mode, its zoom and its height.
+  const setUp = (mode: Mode) => {
+    const gestures$ = new Subject<unknown>()
+    const reader = {
+      gestures: { gestures$ },
+      settings: { values: mode },
+      zoom: { state: { isZooming: false, currentScale: 1 } },
+      viewport: { value: { element: { clientHeight: 800 } } },
+    } as unknown as AppReader
+    const moves: number[] = []
+    const onClose = vi.fn()
+    turnOnSwipeUpToClose(reader, { onMove: (pull) => moves.push(pull), onClose })
+    const pan = (type: string, deltaY: number) =>
+      gestures$.next({ type: 'pan', gestureEvent: { type, deltaX: 0, deltaY, pointers: type === 'panEnd' ? [] : [{}] } })
+    const swipeUp = () => {
+      pan('panStart', 0)
+      pan('panMove', -150)
+      pan('panMove', -300)
+      pan('panEnd', -300)
+    }
+    return { swipeUp, moves, onClose }
+  }
+
+  it('closes a book read page by page on a long swipe up, the page following the finger', () => {
+    const { swipeUp, moves, onClose } = setUp({ computedPageTurnMode: 'controlled', computedPageTurnDirection: 'horizontal' })
+    swipeUp()
+    expect(moves).toEqual([0, -150, -300])
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a book read by scrolling down alone: swiping up scrolls it', () => {
+    const { swipeUp, moves, onClose } = setUp({ computedPageTurnMode: 'scrollable', computedPageTurnDirection: 'vertical' })
+    swipeUp()
+    expect(moves).toEqual([])
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('leaves a book whose pages turn upwards alone: swiping up turns the page', () => {
+    const { swipeUp, moves, onClose } = setUp({ computedPageTurnMode: 'controlled', computedPageTurnDirection: 'vertical' })
+    swipeUp()
+    expect(moves).toEqual([])
+    expect(onClose).not.toHaveBeenCalled()
   })
 })
