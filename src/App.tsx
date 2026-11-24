@@ -334,6 +334,7 @@ export default function App() {
           key={readingBook.id}
           book={readingBook}
           next={series ? nextInSeries(series, readingBook.id) : undefined}
+          volumes={series ? seriesOfBook(series, readingBook.id)?.books : undefined}
           profileId={profileId}
           onBack={() => {
             const home = series && seriesOfBook(series, readingBook.id)

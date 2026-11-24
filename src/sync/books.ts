@@ -1,5 +1,6 @@
 import { readJson, writeJson } from '../dropbox/api'
 import type { Format } from '../library/library'
+import type { ProgressMap } from './progress'
 
 export type Direction = 'ltr' | 'rtl'
 // pages: turned one at a time, sideways; scroll: one long strip read from top to bottom.
@@ -22,6 +23,18 @@ export async function loadBookSettings(): Promise<BookSettings> {
     if (!(e instanceof TypeError)) throw e
     return cachedBookSettings()
   }
+}
+
+// A book's settings; what it has not set itself comes from the volume of its series read last that has it
+// (volumes: the ids of the series' books), so the next volume opens the way the previous one was read.
+export function bookSetting(settings: BookSettings, bookId: string, volumes: string[], progress: ProgressMap): BookSetting {
+  const others = volumes
+    .filter((id) => id !== bookId && settings[id])
+    .sort((a, b) => (progress[b]?.updatedAt ?? 0) - (progress[a]?.updatedAt ?? 0))
+  const inherited = (key: keyof BookSetting) => settings[bookId]?.[key] ?? others.map((id) => settings[id][key]).find(Boolean)
+  const direction = inherited('direction') as Direction | undefined
+  const flow = inherited('flow') as Flow | undefined
+  return { ...(direction && { direction }), ...(flow && { flow }) }
 }
 
 // Changing one setting of a book keeps its others.

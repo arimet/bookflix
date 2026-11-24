@@ -2,7 +2,7 @@ import { Badge, Box, Button, chakra, CloseButton, Dialog, Flex, Heading, Image, 
 import { useRef } from 'react'
 import { isRead, resumeBook, type Series } from '../library/catalog'
 import type { Book } from '../library/library'
-import { cachedBookSettings, defaultDirection } from '../sync/books'
+import { bookSetting, cachedBookSettings, defaultDirection } from '../sync/books'
 import type { ProgressMap } from '../sync/progress'
 import { BookCover } from './BookCover'
 import { BookMenu } from './BookMenu'
@@ -55,8 +55,7 @@ export function SeriesModal({ series, progress, offline, downloads, onToggleOffl
   const { soft: backdrop } = useSoftBackdrop(cover)
   const read = series.books.filter((b) => isRead(b, progress)).length
   const started = (progress[next.id]?.percent ?? 0) > 0
-  const first = series.books[0]
-  const direction = cachedBookSettings()[first.id]?.direction ?? defaultDirection(first.format)
+  const direction = bookSetting(cachedBookSettings(), next.id, series.books.map((b) => b.id), progress).direction ?? defaultDirection(next.format)
   const missing = series.books.filter((b) => !offline.has(b.id))
   const downloadingAll = series.books.some((b) => b.id in downloads)
 

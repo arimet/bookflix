@@ -9,7 +9,7 @@ import type { Book } from '../library/library'
 import { pageAt, pageCfi, pageOfCfi, stripPercent } from '../reader/comicStrip'
 import { isDoubleTap } from '../reader/pageZoom'
 import { openComic } from '../reader/openReader'
-import { cachedBookSettings, defaultDirection, setBookSetting, type BookSetting, type Direction } from '../sync/books'
+import { defaultDirection, setBookSetting, type BookSetting, type Direction } from '../sync/books'
 import { deviceName, flushPending, localProgress, recordProgress } from '../sync/progress'
 import { columnWidth, themeBg, useLayout } from './readerLayout'
 import { ReaderSettings } from './ReaderSettings'
@@ -37,12 +37,13 @@ const imageRatio = (url: string) =>
     image.src = url
   })
 
-type Props = { book: Book; next?: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void; onReopen: () => void }
+// setting: the book's direction and flow, as ReaderScreen worked them out at opening.
+type Props = { book: Book; next?: Book; setting: BookSetting; profileId: string; onBack: () => void; onError: (e: unknown) => void; onReopen: () => void }
 
 // A comic read by scrolling down: its pages one under the other, each the width of the column and the height of its
 // image, in a plain scrolling box. The browser scrolls, the strip zooms as on iPhone (useStripZoom); pages are
 // fetched ahead as the scroll goes.
-export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }: Props) {
+export function ComicStrip({ book, next, setting, profileId, onBack, onError, onReopen }: Props) {
   const [layout, changeLayout] = useLayout()
   const [comic, setComic] = useState<Comic>()
   const [failed, setFailed] = useState<string>()
@@ -63,6 +64,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
 
   // The App rebuilds the book object whenever the file list refreshes; only a new id or rev is another book.
   const bookRef = useRef(book)
+  const directionRef = useRef(setting.direction) // the one at opening: a change reopens the strip
   useLayoutEffect(() => {
     bookRef.current = book
   })
@@ -74,7 +76,7 @@ export function ComicStrip({ book, next, profileId, onBack, onError, onReopen }:
     let cancelled = false
     let close = () => {}
     ;(async () => {
-      const direction = cachedBookSettings()[book.id]?.direction ?? defaultDirection(book.format)
+      const direction = directionRef.current ?? defaultDirection(book.format)
       const opened = await openComic(book, direction)
       close = opened.close
       if (cancelled) return close()

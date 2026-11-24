@@ -10,7 +10,7 @@ import { AuthError } from '../dropbox/auth'
 import type { Book } from '../library/library'
 import { markSpineItemOnScreen, tapSide, turnOnEdgePulls, turnOnDoubleTapUnzoom, turnOnSideTaps, turnOnSwipeUpToClose, turnTowards, watchLastPage, whenPageOnScreenReady, type AppReader } from '../reader/createAppReader'
 import { isComic, openReader } from '../reader/openReader'
-import { cachedBookSettings, defaultDirection, loadBookSettings, setBookSetting, type BookSetting, type Direction, type Flow } from '../sync/books'
+import { bookSetting, cachedBookSettings, defaultDirection, loadBookSettings, setBookSetting, type BookSetting, type Direction, type Flow } from '../sync/books'
 import { columnWidth, themeBg, useLayout } from './readerLayout'
 import { ComicStrip } from './ComicStrip'
 import { ReaderSettings } from './ReaderSettings'
@@ -31,8 +31,10 @@ const ABOVE_HOME_BAR = {
 }
 const CLOSE_DURATION = 200
 
-// next: the following volume of the series, offered on the last page.
-type Props = { book: Book; next?: Book; profileId: string; onBack: () => void; onError: (e: unknown) => void }
+// next: the following volume of the series, offered on the last page; volumes: the books of its series.
+type Props = { book: Book; next?: Book; volumes?: Book[]; profileId: string; onBack: () => void; onError: (e: unknown) => void }
+// setting: the book's direction and flow, its series' last read volume giving those it has not set (bookSetting).
+type OpenProps = Props & { setting: BookSetting; onReopen: () => void }
 
 // A comic read by scrolling down is shown by ComicStrip, prose-reader showing a page only once the scroll has
 // stopped for half a second; every other book by prose-reader. onReopen opens the book again from scratch, after
@@ -40,13 +42,15 @@ type Props = { book: Book; next?: Book; profileId: string; onBack: () => void; o
 export function ReaderScreen(props: Props) {
   const [opening, setOpening] = useState(0)
   const onReopen = useCallback(() => setOpening((n) => n + 1), [])
-  const strip = isComic(props.book) && cachedBookSettings()[props.book.id]?.flow === 'scroll'
+  // Read again at each opening: a change of direction or flow reopens the book.
+  const setting = bookSetting(cachedBookSettings(), props.book.id, (props.volumes ?? []).map((b) => b.id), localProgress(props.profileId))
+  const strip = isComic(props.book) && setting.flow === 'scroll'
   return strip
-    ? <ComicStrip key={`strip-${opening}`} {...props} onReopen={onReopen} />
-    : <BookReader key={`book-${opening}`} {...props} onReopen={onReopen} />
+    ? <ComicStrip key={`strip-${opening}`} {...props} setting={setting} onReopen={onReopen} />
+    : <BookReader key={`book-${opening}`} {...props} setting={setting} onReopen={onReopen} />
 }
 
-function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props & { onReopen: () => void }) {
+function BookReader({ book, next, setting, profileId, onBack, onError, onReopen }: OpenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const sheetRef = useRef<HTMLDivElement | null>(null) // what a swipe up moves
   const onBackRef = useRef(onBack)
@@ -115,6 +119,7 @@ function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props 
   // The App rebuilds the book object whenever the file list or offline set refreshes; only a new
   // id or rev means a different book to open.
   const bookRef = useRef(book)
+  const settingRef = useRef(setting) // the one at opening: a change reopens the reader
   useLayoutEffect(() => {
     bookRef.current = book
   })
@@ -135,12 +140,11 @@ function BookReader({ book, next, profileId, onBack, onError, onReopen }: Props 
     ;(async () => {
       // Local copies: the library screen refreshed progress just before, so opening waits on no extra call.
       const progress = localProgress(profileId)
-      const bookSettings = cachedBookSettings()
       loadBookSettings().catch(() => {}) // refreshes the cache for next time
-      const dir = bookSettings[book.id]?.direction ?? defaultDirection(book.format)
+      const dir = settingRef.current.direction ?? defaultDirection(book.format)
       const saved = progress[book.id]
       const { reader: instance, close, scrollOnly } = await openReader(book, dir, saved?.cfi ? { type: 'cfi', value: saved.cfi } : undefined,
-        bookSettings[book.id]?.flow)
+        settingRef.current.flow)
       if (cancelled || !containerRef.current) {
         instance.destroy()
         return close()
