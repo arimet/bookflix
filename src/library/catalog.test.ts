@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import type { DbxFile } from '../dropbox/api'
 import type { ProgressMap } from '../sync/progress'
-import { buildSeries, heroPick, newestBook, nextInSeries, ofKind, readingHistory, recentlyAdded, resumeBook, searchLibrary, seriesOfBook } from './catalog'
+import { buildSeries, heroPick, isFolder, newestBook, nextInSeries, ofKind, readingHistory, recentlyAdded, relatedSeries, resumeBook, searchLibrary, seriesOfBook } from './catalog'
 import { buildTree } from './library'
 
 const f = (path: string, serverModified = '2026-01-01T00:00:00Z'): DbxFile => ({
@@ -110,4 +110,41 @@ test('readingHistory lists opened books newest first, without reset ones', () =>
   })
   expect(history.map((h) => h.book.title)).toEqual(['Dune', 'T1'])
   expect(history[1].series.title).toBe('S')
+})
+
+test('heroPick with nothing in progress: the next unread volume after the last book read', () => {
+  const series = catalog(f('/Ebook/S/T1.cbz'), f('/Ebook/S/T2.cbz'), f('/Ebook/S/T3.cbz'), f('/Ebook/Dune.epub'))
+  const s = series.find((x) => x.title === 'S')!
+  const [t1, t2, t3] = s.books
+  expect(heroPick(series, { [t1.id]: p(1, 5) }, 0)).toEqual({ series: s, book: t2, after: { book: t1, series: s, same: true } })
+  // T2 read earlier already: on to T3
+  expect(heroPick(series, { [t2.id]: p(1, 1), [t1.id]: p(1, 5) }, 0)?.book).toBe(t3)
+  // The last one read is the last volume: nothing follows in the series, a random pick
+  expect(heroPick(series, { [t3.id]: p(1, 5) }, 0.99)).toEqual({ series: s, book: t1 })
+})
+
+test('heroPick with nothing in progress: else a series of the same author not finished yet', () => {
+  const series = catalog(
+    f('/Ebook/Agatha Christie/Hercule Poirot/Orient-Express.epub'),
+    f('/Ebook/Agatha Christie/Miss Marple/Presbytère.epub'),
+    f('/Ebook/Agatha Christie/Miss Marple/Pension Vanilos.epub'),
+    f('/Ebook/Agatha Christie/Tommy et Tuppence.epub'),
+    f('/Ebook/Dune.epub'),
+  )
+  const poirot = series.find((s) => s.key === 'Agatha Christie/Hercule Poirot')!
+  const marple = series.find((s) => s.key === 'Agatha Christie/Miss Marple')!
+  const tommy = series.find((s) => s.key === 'Agatha Christie')!
+  const orient = poirot.books[0]
+  const [vanilos, presbytere] = marple.books
+  expect(relatedSeries(series, poirot)).toEqual([tommy, marple])
+  expect(heroPick(series, { [orient.id]: p(1, 5), [tommy.books[0].id]: p(1, 1) }, 0))
+    .toEqual({ series: marple, book: vanilos, after: { book: orient, series: poirot, same: false } })
+  expect(heroPick(series, { [orient.id]: p(1, 5), [tommy.books[0].id]: p(1, 1), [vanilos.id]: p(1, 1) }, 0)?.book).toBe(presbytere)
+  // A top-level folder relates to its sub-folders
+  expect(relatedSeries(series, tommy)).toEqual([poirot, marple])
+  // A book alone at the root has no author folder
+  const dune = series.find((s) => s.title === 'Dune')!
+  expect(isFolder(dune)).toBe(false)
+  expect(relatedSeries(series, dune)).toEqual([])
+  expect(heroPick(series, { [dune.books[0].id]: p(1, 5) }, 0)?.after).toBeUndefined()
 })

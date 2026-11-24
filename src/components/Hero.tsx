@@ -1,14 +1,14 @@
 import { Box, Button, Flex, Heading, Image, Stack, Text } from '@chakra-ui/react'
 import { useRef } from 'react'
 import { LuInfo, LuPlay } from 'react-icons/lu'
-import type { Series } from '../library/catalog'
+import type { HeroPick, Series } from '../library/catalog'
 import type { Book } from '../library/library'
 import { RED } from '../theme'
 import { useCoverUrl } from './useCoverUrl'
 import { useSoftBackdrop } from './useSoftBackdrop'
 import { readHref, seriesHref } from '../routes'
 
-type Props = { series: Series; book: Book; percent: number }
+type Props = { series: Series; book: Book; percent: number; after?: HeroPick['after'] }
 
 const COVER_W = 'min(22vw, 300px)'
 const COVER_END = 'max(0px, calc(50vw - 40rem))'
@@ -19,8 +19,8 @@ export const COVER_SPACE = `calc(3rem + ${COVER_END} + ${COVER_W} + 2rem)`
 const volumeName = (series: Series, book: Book) =>
   book.title.startsWith(series.title) ? book.title.slice(series.title.length).replace(/^[\s\-–—·:,]+/, '') || book.title : book.title
 
-// The big poster: the book being read (or the newest series), its cover blurred across the whole width.
-export function Hero({ series, book, percent }: Props) {
+// The big poster: the book being read (else what follows the last one read, or a series at random), its cover blurred across the whole width.
+export function Hero({ series, book, percent, after }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const cover = useCoverUrl(book, ref)
   const { soft: backdrop, glow } = useSoftBackdrop(cover)
@@ -59,6 +59,11 @@ export function Hero({ series, book, percent }: Props) {
             animation="rise .7s cubic-bezier(.16,1,.3,1) both" css={{ '@media (prefers-reduced-motion: reduce)': { animation: 'none' } }} />
         )}
         <Stack gap={{ base: 3, md: 4 }} w="full" maxW={{ md: '36rem' }} textAlign={{ base: 'center', md: 'left' }} align={{ base: 'center', md: 'flex-start' }}>
+          {after && (
+            <Text fontSize={{ base: 'xs', md: 'sm' }} fontWeight="bold" letterSpacing="0.08em" textTransform="uppercase" color="muted" lineClamp={1}>
+              {after.same ? 'La suite de ta lecture' : `Parce que tu as lu ${after.series.title}`}
+            </Text>
+          )}
           <Heading as="h1" fontSize={{ base: '4xl', md: '6xl', xl: '7xl' }} fontWeight="900" lineHeight=".95" letterSpacing="-0.03em"
             textWrap="balance" textShadow="0 2px 24px rgba(0,0,0,.5)">
             {series.title}
@@ -71,6 +76,8 @@ export function Hero({ series, book, percent }: Props) {
               <Text color="white" fontWeight="semibold" whiteSpace="nowrap">{Math.round(percent * 100)} %</Text>
               {count > 1 && <Text color="muted" lineClamp={1}>{volumeName(series, book)}</Text>}
             </Flex>
+          ) : after?.same ? (
+            <Text color="muted" fontSize={{ base: 'sm', md: 'md' }} lineClamp={1}>{volumeName(series, book)}</Text>
           ) : (
             <Text color="muted" fontSize={{ base: 'sm', md: 'md' }}>{count} {count > 1 ? 'tomes' : 'livre'}</Text>
           )}

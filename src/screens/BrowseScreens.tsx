@@ -4,16 +4,19 @@ import { useState } from 'react'
 import { BookCover } from '../components/BookCover'
 import { BookMenu } from '../components/BookMenu'
 import { LibrarySkeleton } from '../components/Loader'
-import { readHref } from '../routes'
+import { readHref, seriesHref } from '../routes'
 import { BookCard, SeriesCard, SeriesGrid } from '../components/Cards'
 import { COVER_SPACE, Hero } from '../components/Hero'
 import { popInOut } from '../components/motion'
 import { Row } from '../components/Row'
-import { heroPick, newestBook, ofKind, readingHistory, readingNow, recentlyAdded, searchLibrary, seriesOfBook, type Kind, type Series } from '../library/catalog'
+import { heroPick, isFolder, newestBook, ofKind, readingHistory, readingNow, recentlyAdded, searchLibrary, seriesOfBook, type Kind, type Series } from '../library/catalog'
 import type { Book } from '../library/library'
 import type { ProgressMap } from '../sync/progress'
 
 type Data = { series: Series[] | null; progress: ProgressMap; offline: Set<string>; onReset: (book: Book) => void; onToggleOffline: (book: Book) => void }
+
+// The "see the series" action of a book, for a book filed in a folder.
+const folderHref = (s: Series) => (isFolder(s) ? seriesHref(s) : undefined)
 
 // "Boruto · Tome 02" when the book belongs to a series of several volumes
 const bookLabel = (series: Series[], b: Book) => {
@@ -39,22 +42,26 @@ export function HomeScreen({ series, progress, offline, onReset, onToggleOffline
   const hero = heroPick(series, progress, random)
   const books = series.flatMap((s) => s.books)
   const label = (b: Book) => bookLabel(series, b)
-  const card = (b: Book) => (
+  const card = (b: Book, folder?: Series) => (
     <BookCard key={b.id} book={b} label={label(b)} percent={progress[b.id]?.percent}
       onReset={(progress[b.id]?.percent ?? 0) > 0 ? () => onReset(b) : undefined}
       onDownload={offline.has(b.id) ? undefined : () => onToggleOffline(b)}
-      onRemoveOffline={offline.has(b.id) ? () => onToggleOffline(b) : undefined} />
+      onRemoveOffline={offline.has(b.id) ? () => onToggleOffline(b) : undefined}
+      seriesHref={folder && folderHref(folder)} />
   )
   return (
     <Box pb="16">
-      {hero && <Hero series={hero.series} book={hero.book} percent={progress[hero.book.id]?.percent ?? 0} />}
+      {hero && <Hero series={hero.series} book={hero.book} after={hero.after} percent={progress[hero.book.id]?.percent ?? 0} />}
       <Stack gap={{ base: 6, md: 10 }} mt={{ base: -6, md: -16 }} position="relative"
         css={hero ? { '& > section:first-of-type': { w: { md: `calc(100% - ${COVER_SPACE})` } } } : undefined}>
         <Row title="Reprendre la lecture" small>
-          {readingNow(series, progress).slice(0, 20).map(card)}
+          {readingNow(series, progress).slice(0, 20).map((b) => card(b))}
+        </Row>
+        <Row title="Historique" small more="#/historique">
+          {readingHistory(series, progress).slice(0, 20).map(({ book, series: s }) => card(book, s))}
         </Row>
         <Row title="Téléchargés">
-          {books.filter((b) => offline.has(b.id)).map(card)}
+          {books.filter((b) => offline.has(b.id)).map((b) => card(b))}
         </Row>
         <Row title="Ajoutés récemment">{recentlyAdded(series).map((s) => <SeriesCard key={s.key} series={s} cover={newestBook(s)} />)}</Row>
         <Row title="BD & mangas">{ofKind(series, 'comics').map((s) => <SeriesCard key={s.key} series={s} />)}</Row>
@@ -101,7 +108,7 @@ export function HistoryScreen({ series, progress, offline, onReset, onToggleOffl
           <motion.div key={book.id} {...popInOut}>
           <Flex gap="4" align="center" py="3" borderTop="1px solid #2e2e2e" position="relative">
             <BookMenu title={book.title} onReset={() => onReset(book)} onDownload={offline.has(book.id) ? undefined : () => onToggleOffline(book)}
-              onRemoveOffline={offline.has(book.id) ? () => onToggleOffline(book) : undefined} button={{ top: 'calc(50% - 0.75rem)', right: '0' }}>
+              onRemoveOffline={offline.has(book.id) ? () => onToggleOffline(book) : undefined} seriesHref={folderHref(s)} button={{ top: 'calc(50% - 0.75rem)', right: '0' }}>
               <chakra.a href={readHref(book)} display="flex" gap="4" alignItems="center" flex="1" minW="0" pr="10">
                 <Box w="12" flexShrink={0}><BookCover book={book} small percent={entry.percent} /></Box>
                 <Stack gap="0.5" minW="0">

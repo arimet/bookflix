@@ -77,10 +77,35 @@ export function readingNow(all: Series[], progress: ProgressMap): Book[] {
     .sort((a, b) => progress[b.id].updatedAt - progress[a.id].updatedAt)
 }
 
-// The book in progress, else a series picked at random (random: a number in [0, 1)), at its first unread volume.
-export function heroPick(all: Series[], progress: ProgressMap, random: number): { series: Series; book: Book } | null {
+// A folder of the library, not a book lying alone at its root.
+export const isFolder = (s: Series) => !s.key.startsWith('book:')
+
+// Series filed next to this one, under the same parent folder (an author: "Agatha Christie/Miss Marple" for
+// "Agatha Christie/Hercule Poirot"); for a top-level folder, the series in its own sub-folders.
+export function relatedSeries(all: Series[], s: Series): Series[] {
+  if (!isFolder(s)) return []
+  const parent = s.key.includes('/') ? s.key.slice(0, s.key.lastIndexOf('/')) : s.key
+  return all
+    .filter((other) => other !== s && (other.key === parent || other.key.startsWith(`${parent}/`)))
+    .sort((a, b) => collator.compare(a.key, b.key))
+}
+
+export type HeroPick = { series: Series; book: Book; after?: { book: Book; series: Series; same: boolean } }
+
+// The book in progress; else, after the last book read, the next unread volume of its series (same: true) or
+// a series of the same author not finished yet; else a series picked at random (random: a number in [0, 1)),
+// at its first unread volume.
+export function heroPick(all: Series[], progress: ProgressMap, random: number): HeroPick | null {
   const book = readingNow(all, progress)[0]
   if (book) return { series: seriesOfBook(all, book.id)!, book }
+  const last = readingHistory(all, progress)[0]
+  if (last) {
+    const after = { book: last.book, series: last.series }
+    const next = last.series.books.slice(last.series.books.indexOf(last.book) + 1).find((b) => !isRead(b, progress))
+    if (next) return { series: last.series, book: next, after: { ...after, same: true } }
+    const related = relatedSeries(all, last.series).find((s) => !isRead(resumeBook(s, progress), progress))
+    if (related) return { series: related, book: resumeBook(related, progress), after: { ...after, same: false } }
+  }
   const picked = all[Math.floor(random * all.length)]
   return picked ? { series: picked, book: resumeBook(picked, progress) } : null
 }

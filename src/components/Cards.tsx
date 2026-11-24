@@ -19,12 +19,14 @@ export function SeriesCard({ series, cover = series.books[0] }: { series: Series
 }
 
 // label: "Boruto · Tome 02" when the book belongs to a series of several volumes
-type BookCardProps = { book: Book; label: string; percent?: number; onReset?: () => void; onDownload?: () => void; onRemoveOffline?: () => void }
+type BookCardProps = {
+  book: Book; label: string; percent?: number; onReset?: () => void; onDownload?: () => void; onRemoveOffline?: () => void; seriesHref?: string
+}
 
-export function BookCard({ book, label, percent, onReset, onDownload, onRemoveOffline }: BookCardProps) {
+export function BookCard({ book, label, percent, onReset, onDownload, onRemoveOffline, seriesHref }: BookCardProps) {
   return (
     <Box position="relative">
-      <BookMenu title={label} onReset={onReset} onDownload={onDownload} onRemoveOffline={onRemoveOffline} button={{ top: '1.5', right: '1.5' }}>
+      <BookMenu title={label} onReset={onReset} onDownload={onDownload} onRemoveOffline={onRemoveOffline} seriesHref={seriesHref} button={{ top: '1.5', right: '1.5' }}>
         <chakra.a href={readHref(book)} display="block" {...lift} aria-label={label}>
           <BookCover book={book} label={label} percent={percent} />
           <Text fontSize="xs" color="muted" mt="1.5" lineClamp={1}>{label}</Text>

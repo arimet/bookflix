@@ -7,20 +7,27 @@ type Props = {
   onReset?: () => void // for a started book
   onDownload?: () => void // for a book not on this device
   onRemoveOffline?: () => void // for a book downloaded on this device
+  seriesHref?: string // to open the folder of its series
   children: React.ReactElement // a long press (touch) or a right click on it opens the menu
   button?: { top: string; right: string } // where to put the "⋯" button, if any
 }
 
 // The actions on a book, from its "⋯" button or a long press. Starting over asks first.
-export function BookMenu({ title, onReset, onDownload, onRemoveOffline, children, button }: Props) {
+export function BookMenu({ title, onReset, onDownload, onRemoveOffline, seriesHref, children, button }: Props) {
   const [asking, setAsking] = useState(false)
   const open = useRef(false)
-  if (!onReset && !onDownload && !onRemoveOffline) return children
-  const onSelect = ({ value }: { value: string }) => (value === 'reset' ? setAsking(true) : value === 'download' ? onDownload?.() : onRemoveOffline?.())
+  if (!onReset && !onDownload && !onRemoveOffline && !seriesHref) return children
+  const onSelect = ({ value }: { value: string }) => {
+    if (value === 'reset') setAsking(true)
+    if (value === 'download') onDownload?.()
+    if (value === 'offline') onRemoveOffline?.()
+    if (value === 'series' && seriesHref) location.hash = seriesHref
+  }
   const content = (
     <Portal>
       <Menu.Positioner>
         <Menu.Content bg="rgba(0,0,0,.92)" color="white" borderColor="#333">
+          {seriesHref && <Menu.Item value="series">Voir la série</Menu.Item>}
           {onReset && <Menu.Item value="reset">Remettre à zéro</Menu.Item>}
           {onDownload && <Menu.Item value="download">Télécharger sur l'appareil</Menu.Item>}
           {onRemoveOffline && <Menu.Item value="offline">Supprimer de l'appareil</Menu.Item>}

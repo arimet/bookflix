@@ -1,11 +1,11 @@
-import { Box, Flex, Heading, IconButton } from '@chakra-ui/react'
+import { Box, chakra, Flex, Heading, IconButton } from '@chakra-ui/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Children, isValidElement, useRef, type ReactNode } from 'react'
 import { foldInOut, popInOut } from './motion'
 
 // A Netflix row: scrolls sideways (snap on touch), arrows appear on hover with a mouse.
-// Books come and go with an animation; the row folds away with its last book.
-export function Row({ title, small, children }: { title: string; small?: boolean; children: ReactNode }) {
+// Books come and go with an animation; the row folds away with its last book. more: a page with all of them.
+export function Row({ title, small, more, children }: { title: string; small?: boolean; more?: string; children: ReactNode }) {
   const track = useRef<HTMLDivElement>(null)
   const items = Children.toArray(children).filter(isValidElement)
   const scroll = (dir: 1 | -1) => track.current?.scrollBy({ left: dir * track.current.clientWidth * 0.9, behavior: 'smooth' })
@@ -14,7 +14,14 @@ export function Row({ title, small, children }: { title: string; small?: boolean
     <AnimatePresence initial={false}>
       {items.length > 0 && (
         <motion.section key="row" {...foldInOut} className="group" aria-label={title} style={{ position: 'relative' }}>
-          <Heading fontSize={{ base: 'md', md: 'xl' }} fontWeight="bold" mb="2" px={{ base: 4, md: 12 }}>{title}</Heading>
+          <Flex align="baseline" gap="3" mb="2" px={{ base: 4, md: 12 }}>
+            <Heading fontSize={{ base: 'md', md: 'xl' }} fontWeight="bold">{title}</Heading>
+            {more && (
+              <chakra.a href={more} fontSize={{ base: 'xs', md: 'sm' }} fontWeight="semibold" color="muted" _hover={{ color: 'white' }}>
+                Tout voir ›
+              </chakra.a>
+            )}
+          </Flex>
           <Flex ref={track} position="relative" gap={{ base: 2, md: 3 }} overflowX="auto" px={{ base: 4, md: 12 }} py="2" scrollSnapType="x mandatory"
             scrollPaddingX={{ base: 4, md: 12 }} css={{ scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
             <AnimatePresence mode="popLayout" initial={false}>

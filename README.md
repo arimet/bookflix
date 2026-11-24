@@ -38,8 +38,9 @@ for what Bookflix reads and writes.
 
 **Library**
 - Reads **EPUB, CBZ, CBR and PDF**.
-- A Netflix home page: the book you are reading as a poster (a series picked at random when none is), then rows (Continue reading, Downloaded, Recently added,
-  Comics & manga, Books).
+- A Netflix home page: the book you are reading as a poster, then rows (Continue reading, History, Downloaded, Recently added,
+  Comics & manga, Books). With no book in progress, the poster offers the next volume of the last book read, else another
+  series from the same parent folder (an author), else a series picked at random.
 - Each folder is a series; its sheet lists the volumes like episodes.
 - Search by folder or author (shows their series) or by book title (shows the book).
 - A coloured cover for books that have none.
@@ -54,7 +55,7 @@ for what Bookflix reads and writes.
 
 **Household**
 - A "Who's reading?" screen, one reading history per person, avatars and an optional PIN.
-- Long press a book (or right click) to start it over or remove its download.
+- Long press a book (or right click) to start it over, remove its download, or, from the history, open its series.
 
 **Book requests**
 - Search any book (Google Books, falling back on the BnF catalogue and Open Library) and ask for it.
